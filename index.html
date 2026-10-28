@@ -195,9 +195,12 @@
       <a id="lnContra" href="#" target="_blank" rel="noopener">Contra <span>↗</span></a>
       <a id="lnLinkedin" href="#" target="_blank" rel="noopener">LinkedIn <span>↗</span></a>
       <a id="lnGithub" href="#" target="_blank" rel="noopener">GitHub <span>↗</span></a>
+      <a id="lnEmail" href="#">Email <span id="lnEmailTx"></span></a>
     </div>
   </div>
-  <form id="form" novalidate>
+  <form id="form" name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" novalidate>
+    <input type="hidden" name="form-name" value="contact">
+    <p hidden aria-hidden="true"><label>Do not fill this in: <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
     <div class="f2">
       <label class="fld">Name<input name="name" autocomplete="name" placeholder="Your name"><span class="msg">Please enter your name (2+ characters).</span></label>
       <label class="fld">Email<input name="email" type="email" autocomplete="email" placeholder="you@company.com"><span class="msg">Enter a valid email address.</span></label>
@@ -224,10 +227,11 @@
 /* ===== CONFIGURAÇÃO — troque pelos seus dados reais =====
    Os links abaixo são páginas iniciais genéricas até você colocar seus perfis. */
 const CONFIG = {
-  contra:   'https://contra.com/',            // ex.: https://contra.com/seu_usuario
+  contra:   'https://contra.com/igor_pequeno_5cd2xcut',   // perfil na Contra
   linkedin: 'https://www.linkedin.com/',      // ex.: https://www.linkedin.com/in/seu-perfil
   github:   'https://github.com/IGPIKENO',      // perfil do GitHub
-  email:    'monacolabss@gmail.com'           // e-mail de contato (aparece no código da página); vazio = o formulário só copia o rascunho
+  email:    'monacolabss@gmail.com',          // e-mail de contato (aparece no código da página)
+  formUrl:  'https://monacolabs.netlify.app/' // o formulário envia para o Netlify Forms deste site (as mensagens chegam no painel do Netlify e, se ativado, por e-mail)
 };
 
 const CATS = [['all', 'All'], ['3d', '3D & WebGL'], ['audio', 'Audio Engineering & DSP'], ['ui', 'UI Motion & Micro-interactions'], ['data', 'Data Viz & AI Systems']];
@@ -254,6 +258,7 @@ const P = [
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 $('#yr').textContent = new Date().getFullYear();
 $('#heroContra').href = $('#lnContra').href = CONFIG.contra; $('#lnLinkedin').href = CONFIG.linkedin; $('#lnGithub').href = CONFIG.github;
+$('#lnEmail').href = 'mailto:' + CONFIG.email; $('#lnEmailTx').textContent = CONFIG.email;
 
 /* ---------- navegação mobile ---------- */
 $('#burger').onclick = () => { const o = $('#links').classList.toggle('open'); $('#burger').setAttribute('aria-expanded', o); };
@@ -344,15 +349,29 @@ const form = $('#form'), rules = {
   type: v => !!v, budget: v => !!v, message: v => v.trim().length >= 20
 };
 const check = el => { const ok = rules[el.name](el.value), f = el.closest('.fld'); f.classList.toggle('err', !ok); f.classList.toggle('ok', ok); return ok; };
-$$('input,select,textarea', form).forEach(el => { el.addEventListener('blur', () => check(el)); el.addEventListener('input', () => { if (el.closest('.fld').classList.contains('err')) check(el); }); });
+const fields = () => $$('input,select,textarea', form).filter(el => rules[el.name]);
+fields().forEach(el => { el.addEventListener('blur', () => check(el)); el.addEventListener('input', () => { if (el.closest('.fld').classList.contains('err')) check(el); }); });
+const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 form.addEventListener('submit', async e => {
-  e.preventDefault(); const els = $$('input,select,textarea', form), ok = els.map(check).every(Boolean), box = $('#okbox');
-  if (!ok) { box.style.display = 'none'; (els.find(el => el.closest('.fld').classList.contains('err')) || {}).focus?.(); return; }
+  e.preventDefault(); const els = fields(), ok = els.map(check).every(Boolean), box = $('#okbox'), btn = $('button[type=submit]', form);
+  box.style.display = 'none'; box.style.borderColor = ''; box.style.background = ''; box.style.color = '';
+  if (!ok) { (els.find(el => el.closest('.fld').classList.contains('err')) || {}).focus?.(); return; }
   const d = Object.fromEntries(new FormData(form)), text = `Project: ${d.type}\nBudget: ${d.budget}\nFrom: ${d.name} <${d.email}>\n\n${d.message}`;
-  box.style.display = 'block';
-  if (CONFIG.email) { location.href = `mailto:${CONFIG.email}?subject=${encodeURIComponent('Project inquiry — ' + d.type)}&body=${encodeURIComponent(text)}`; box.textContent = '✓ Your email app should open with the message ready to send.'; }
-  else { try { await navigator.clipboard.writeText(text); } catch (_) {} box.textContent = '✓ Message validated and copied. (Set CONFIG.email in index.html to send it by email.)'; }
-  form.reset(); $$('.fld', form).forEach(f => f.classList.remove('ok', 'err'));
+  const mailto = `mailto:${CONFIG.email}?subject=${encodeURIComponent('Project inquiry — ' + d.type)}&body=${encodeURIComponent(text)}`;
+  btn.disabled = true; const label = btn.textContent; btn.textContent = 'Sending…';
+  try {
+    if (isLocal) { await new Promise(r => setTimeout(r, 600)); box.textContent = '✓ Preview only: nothing is sent from a local server.'; }
+    else {
+      const same = new URL(CONFIG.formUrl).origin === location.origin;
+      const r = await fetch(CONFIG.formUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ 'form-name': 'contact', 'bot-field': d['bot-field'] || '', name: d.name, email: d.email, type: d.type, budget: d.budget, message: d.message }).toString(), mode: same ? 'same-origin' : 'no-cors' });
+      if (same && !r.ok) throw new Error('HTTP ' + r.status);
+      box.textContent = '✓ Message sent. I will reply to your email within one business day.';
+    }
+    box.style.display = 'block'; form.reset(); $$('.fld', form).forEach(f => f.classList.remove('ok', 'err'));
+  } catch (err) {
+    box.style.display = 'block'; box.style.borderColor = 'rgba(251,113,133,.6)'; box.style.background = 'rgba(251,113,133,.1)'; box.style.color = '#fecdd3';
+    box.innerHTML = 'Could not send the message. Please email me directly: <a href="' + mailto + '" style="text-decoration:underline">' + CONFIG.email + '</a>';
+  } finally { btn.disabled = false; btn.textContent = label; }
 });
 
 /* ---------- fundo: partículas com profundidade que reagem ao cursor ---------- */
