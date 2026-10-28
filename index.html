@@ -82,8 +82,18 @@
   .cur{display:inline-flex;margin-top:26px;border:1px solid var(--line);border-radius:999px;padding:5px;background:rgba(255,255,255,.04)}
   .cur button{border:0;background:none;color:var(--mut);padding:9px 22px;border-radius:999px;font:600 15px 'Inter',sans-serif;cursor:pointer}
   .cur button[aria-pressed=true]{background:linear-gradient(135deg,var(--acc),#4f7bff);color:#fff}
-  .pk{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin:34px 0 46px}
-  .pkg{position:relative;padding:34px 30px;border-radius:var(--r);border:1px solid var(--line);background:linear-gradient(170deg,rgba(20,26,56,.85),rgba(10,13,30,.9))}
+  .pk{margin:34px 0 46px}
+  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+  .tier{position:relative;text-align:left;cursor:pointer;color:var(--txt,#fff);padding:20px 22px;border-radius:var(--r);border:1px solid var(--line);background:rgba(255,255,255,.03);font:inherit;transition:border-color .2s,background .2s,transform .2s}
+  .tier:hover{border-color:rgba(160,140,255,.6);transform:translateY(-2px)}
+  .tier:focus-visible{outline:2px solid var(--acc);outline-offset:3px}
+  .tier[aria-selected=true]{border-color:var(--acc);background:linear-gradient(170deg,rgba(60,50,140,.55),rgba(20,26,56,.9));box-shadow:0 18px 50px rgba(110,90,255,.3)}
+  .tier .tn{display:block;color:var(--mut);font-size:14px;font-weight:600}
+  .tier .tp{display:block;font:700 32px 'Space Grotesk',sans-serif;margin-top:4px}
+  .tier .tb{position:absolute;right:14px;top:-11px;padding:3px 12px;border-radius:999px;background:linear-gradient(135deg,var(--acc),#4f7bff);font-size:11px;font-weight:700}
+  .pkg{position:relative;padding:34px 30px;border-radius:var(--r);border:1px solid var(--line);background:linear-gradient(170deg,rgba(20,26,56,.85),rgba(10,13,30,.9));animation:pkin .35s ease}
+  @keyframes pkin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .pkg .pkgrid{display:grid;grid-template-columns:1fr 1.2fr;gap:30px;align-items:start}
   .pkg.hot{border-color:var(--acc);box-shadow:0 24px 70px rgba(110,90,255,.3)}
   .pkg .hotb{position:absolute;right:22px;top:-14px;padding:6px 16px;border-radius:999px;background:linear-gradient(135deg,var(--acc),#4f7bff);font-size:13px;font-weight:700}
   .pkg h3{font-size:24px}.pkg .pr{font:700 46px 'Space Grotesk',sans-serif;margin:16px 0 4px}.pkg .pr small{font-size:15px;color:var(--mut);font-weight:500}
@@ -126,7 +136,7 @@
   /* responsivo */
   @media (max-width:980px){
     .hero{grid-template-columns:1fr;min-height:auto;padding-top:40px}
-    .pk{grid-template-columns:1fr}.ct{grid-template-columns:1fr}
+    .pkg .pkgrid{grid-template-columns:1fr}.ct{grid-template-columns:1fr}
     .links{position:absolute;top:68px;left:0;right:0;flex-direction:column;align-items:stretch;gap:0;background:rgba(5,6,13,.96);border-bottom:1px solid var(--line);display:none}
     .links.open{display:flex}.links a{padding:18px 28px;border-top:1px solid var(--line)}
     #burger{display:block}
@@ -134,6 +144,7 @@
   @media (max-width:640px){
     .wrap{padding:0 18px}section{padding:64px 0}.f2{grid-template-columns:1fr}#grid{grid-template-columns:1fr}
     form{padding:22px}th,td{padding:14px 14px;font-size:14px}.stats{gap:24px}
+    .tiers{gap:8px}.tier{padding:14px 12px}.tier .tp{font-size:22px}.tier .tn{font-size:12px}.tier .tb{right:8px}
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 </style>
@@ -334,12 +345,16 @@ const SV = [
   ['Shader / WebGL Effect', 'Single custom effect (glass, particles, post-FX)', '3–5 days', { usd: 750, eur: 690 }],
   ['8-second Loop Video Set', 'MP4 renders of your motion pieces, 1080p/60fps', '2–3 days', { usd: 450, eur: 410 }]
 ];
-let currency = 'usd'; const sym = { usd: '$', eur: '€' }, fmt = (n, c) => (c === 'usd' ? '$' + n.toLocaleString('en-US') : n.toLocaleString('de-DE') + ' €');
+let currency = 'usd', tier = 1; const sym = { usd: '$', eur: '€' }, fmt = (n, c) => (c === 'usd' ? '$' + n.toLocaleString('en-US') : n.toLocaleString('de-DE') + ' €');
 function renderOffers() {
-  $('#pk').innerHTML = PK.map(([n, sub, pr, items, hot]) => `<div class="pkg ${hot ? 'hot' : ''}">${hot ? '<span class="hotb">Most popular</span>' : ''}<h3>${n}</h3><div style="color:var(--mut)">${sub}</div><div class="pr">${fmt(pr[currency], currency)}<small> / project</small></div><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul><a class="btn ${hot ? 'pri' : ''}" href="#contact" style="width:100%;justify-content:center">Request this package</a></div>`).join('');
+  const [n, sub, pr, items, hot] = PK[tier];
+  $('#pk').innerHTML = `<div class="tiers" role="tablist" aria-label="Package">${PK.map(([tn, , tp, , th], i) => `<button type="button" class="tier" role="tab" id="tier${i}" data-tier="${i}" aria-selected="${i === tier}" aria-controls="pkpanel">${th ? '<span class="tb">Most popular</span>' : ''}<span class="tn">${tn}</span><span class="tp">${fmt(tp[currency], currency)}</span></button>`).join('')}</div>`
+    + `<div class="pkg ${hot ? 'hot' : ''}" id="pkpanel" role="tabpanel" aria-labelledby="tier${tier}" key="${tier}"><div class="pkgrid"><div><h3>${n}</h3><div style="color:var(--mut)">${sub}</div><div class="pr">${fmt(pr[currency], currency)}<small> / project</small></div></div><div><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul><a class="btn ${hot ? 'pri' : ''}" href="#contact" style="width:100%;justify-content:center">Request this package</a></div></div></div>`;
   $('#svc').innerHTML = SV.map(([a, b, c, d]) => `<tr><td><b>${a}</b></td><td style="color:var(--mut)">${b}</td><td>${c}</td><td class="p">${fmt(d[currency], currency)}</td></tr>`).join('');
 }
 $$('.cur button').forEach(b => b.onclick = () => { currency = b.dataset.cur; $$('.cur button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderOffers(); });
+$('#pk').addEventListener('click', e => { const t = e.target.closest('[data-tier]'); if (!t || +t.dataset.tier === tier) return; tier = +t.dataset.tier; renderOffers(); $('#tier' + tier).focus({ preventScroll: true }); });
+$('#pk').addEventListener('keydown', e => { if (!['ArrowLeft', 'ArrowRight'].includes(e.key) || !e.target.closest('[data-tier]')) return; e.preventDefault(); tier = (tier + (e.key === 'ArrowRight' ? 1 : PK.length - 1)) % PK.length; renderOffers(); $('#tier' + tier).focus({ preventScroll: true }); });
 renderOffers();
 
 /* ---------- form with visual validation ---------- */
