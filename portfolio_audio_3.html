@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio Áudio · Drum machine</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#eaf1ff;
+         background:radial-gradient(ellipse at 50% 20%,#17163a 0%,#070812 70%)}
+  #title{position:absolute;left:120px;top:60px}
+  #title b{display:block;font-size:60px;font-weight:800;letter-spacing:-.02em}
+  #title span{display:block;margin-top:8px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.2em;color:rgba(255,160,230,.75);text-transform:uppercase}
+  #ctl{position:absolute;right:120px;top:70px;display:flex;gap:16px}
+  #ctl button{padding:18px 30px;border-radius:999px;font:700 22px 'Inter',sans-serif;color:#fff;border:1px solid rgba(255,255,255,.18);cursor:pointer;background:rgba(255,255,255,.07)}
+  #ctl button#btn{border:0;background:linear-gradient(135deg,#ff4d8d,#8b5cf6);box-shadow:0 0 40px rgba(220,80,200,.4)}
+  #ctl button#btn.on{background:linear-gradient(135deg,#ff9a3c,#ff4d4d)}
+  #seq{position:absolute;left:120px;top:220px;width:1680px}
+  .row{display:flex;align-items:center;margin-bottom:22px}
+  .lab{width:150px;font-size:26px;font-weight:700;letter-spacing:.14em}
+  .cells{display:flex;gap:10px}
+  .cell{width:84px;height:92px;border-radius:18px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.045);cursor:pointer;padding:0;outline:none;
+        transition:background .08s,box-shadow .08s}
+  .cell.g4{margin-left:22px}
+  .cell.on{background:var(--c);box-shadow:0 0 28px var(--c);border-color:transparent}
+  .cell.cur{border-color:#fff;box-shadow:0 0 0 2px #fff, 0 0 30px rgba(255,255,255,.45)}
+  .cell.on.cur{filter:brightness(1.5)}
+  #wave{position:absolute;left:120px;top:690px;width:1680px;height:330px;border-radius:30px;background:rgba(10,12,30,.65);border:1px solid rgba(255,255,255,.1)}
+  #nums{position:absolute;left:270px;top:190px;display:flex;gap:10px;font:500 18px ui-monospace,Consolas,monospace;color:rgba(190,200,240,.5)}
+  #nums span{width:84px;text-align:center}#nums span.g4{margin-left:22px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="title"><b>Beat Machine</b><span>16 steps · 120 BPM · <i id="mode" style="font-style:normal">demo sintético</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <div id="ctl"><button id="rand">Aleatório</button><button id="clr">Limpar</button><button id="btn">▶ Ativar áudio ao vivo</button></div>
+  <div id="nums"></div>
+  <div id="seq"></div>
+  <canvas id="wave" width="1680" height="330"></canvas>
+</div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage');
+const tcEl = document.getElementById('tc'), modeEl = document.getElementById('mode'), btn = document.getElementById('btn');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+
+// ===== Motor de áudio procedural (Web Audio) + modelos sintéticos determinísticos =====
+// Sem arquivos externos: bateria, baixo e analisadores nascem de osciladores/ruído.
+// Modo "demo": curvas sintéticas puras de t (loop de 8 s, funcionam com seek).
+// Modo "ao vivo": após um clique do usuário, AnalyserNodes reais alimentam as visualizações.
+const Engine = (() => {
+  let ac, bus, master, an, anL, anR, started = false, timer = null, nextT = 0, step = 0, noiseBuf, pattern = null, eq = [];
+  const edges = Array.from({ length: 65 }, (_, i) => 40 * Math.pow(16000 / 40, i / 64));
+  const defaultPattern = s => {
+    const v = [];
+    if (s % 4 === 0) v.push('kick');
+    if (s === 10) v.push('kick');
+    if (s === 4 || s === 12) v.push('snare');
+    if (s % 2 === 0) v.push(s === 14 ? 'hatO' : 'hat');
+    const bn = { 0: 55, 3: 65.41, 6: 55, 10: 73.42, 12: 61.74 };
+    if (bn[s]) v.push('bass:' + bn[s]);
+    return v;
+  };
+  const noise = () => { const b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
+  const env = (g, t, a, peak, d) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); };
+  const out = pan => { const p = ac.createStereoPanner(); p.pan.value = pan; p.connect(bus); return p; };
+  const nz = (t, ftype, f, q, a, pk, d, pan, dur) => {
+    const n = ac.createBufferSource(); n.buffer = noiseBuf; const fl = ac.createBiquadFilter(); fl.type = ftype; fl.frequency.value = f; fl.Q.value = q;
+    const g = ac.createGain(); env(g, t, a, pk, d); n.connect(fl); fl.connect(g); g.connect(out(pan)); n.start(t, Math.random() * .5); n.stop(t + dur);
+  };
+  const V = {
+    kick(t) { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + .12); env(g, t, .003, .95, .32); o.connect(g); g.connect(out(0)); o.start(t); o.stop(t + .4); },
+    snare(t) { nz(t, 'bandpass', 1800, .8, .002, .55, .17, -.25, .25); const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(140, t + .08); const g = ac.createGain(); env(g, t, .002, .4, .1); o.connect(g); g.connect(out(-.25)); o.start(t); o.stop(t + .15); },
+    hat(t) { nz(t, 'highpass', 7000, .7, .001, .3, .05, .3, .2); },
+    hatO(t) { nz(t, 'highpass', 7000, .7, .001, .3, .18, .3, .3); },
+    clap(t) { for (let k = 0; k < 3; k++) nz(t + k * .011, 'bandpass', 1200, 1.2, .001, .35, k === 2 ? .14 : .02, .15, .2); },
+    bass(t, f) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(900, t); fl.frequency.exponentialRampToValueAtTime(180, t + .22); const g = ac.createGain(); env(g, t, .005, .45, .24); o.connect(fl); fl.connect(g); g.connect(out(0)); o.start(t); o.stop(t + .3); }
+  };
+  const trig = (name, t) => { if (name.startsWith('bass:')) V.bass(t, +name.slice(5)); else if (V[name]) V[name](t); };
+  function sched() { while (nextT < ac.currentTime + .14) { for (const v of pattern(step % 16)) trig(v, nextT); nextT += .125; step++; } }
+  return {
+    get started() { return started; },
+    get ctx() { return ac; },
+    get eq() { return eq; },
+    trig: (name) => { if (started) trig(name, ac.currentTime + .005); },
+    start(patternFn) {
+      if (patternFn) pattern = patternFn; else if (!pattern) pattern = defaultPattern;
+      if (started) { ac.resume(); return; }
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      bus = ac.createGain(); let prev = bus;
+      eq = [0, 1, 2, 3, 4].map(() => { const f = ac.createBiquadFilter(); f.type = 'peaking'; f.frequency.value = 1000; f.gain.value = 0; prev.connect(f); prev = f; return f; });
+      master = ac.createGain(); master.gain.value = .85; prev.connect(master);
+      an = ac.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = .72; master.connect(an); an.connect(ac.destination);
+      const sp = ac.createChannelSplitter(2); master.connect(sp);
+      anL = ac.createAnalyser(); anR = ac.createAnalyser(); anL.fftSize = anR.fftSize = 1024; sp.connect(anL, 0); sp.connect(anR, 1);
+      noiseBuf = noise(); started = true; ac.resume(); nextT = ac.currentTime + .08; step = 0; timer = setInterval(sched, 25);
+    },
+    stop() { if (!started) return; clearInterval(timer); ac.suspend(); started = false; ac.close(); },
+    // 64 bandas logarítmicas (40 Hz–16 kHz), valores 0..1
+    spectrum(outArr) {
+      if (!started) return false;
+      const u = new Uint8Array(an.frequencyBinCount), nyq = ac.sampleRate / 2, n = u.length; an.getByteFrequencyData(u);
+      for (let b = 0; b < 64; b++) { const lo = Math.floor(edges[b] / nyq * n), hi = Math.max(lo + 1, Math.ceil(edges[b + 1] / nyq * n)); let m = 0; for (let k = lo; k < hi && k < n; k++) m = Math.max(m, u[k]); outArr[b] = Math.pow(m / 255, 1.6); }
+      return true;
+    },
+    levels() {
+      if (!started) return null;
+      const a = new Float32Array(anL.fftSize), b = new Float32Array(anR.fftSize); anL.getFloatTimeDomainData(a); anR.getFloatTimeDomainData(b);
+      const rms = x => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / x.length); };
+      return [rms(a), rms(b)];
+    }
+  };
+})();
+
+// Modelos sintéticos puros de t (120 BPM; período de 8 s => loop perfeito)
+function synthSpec(t, outArr) {
+  const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
+  const kick = Math.exp(-bf * 7) * (bi % 4 === 0 ? 1 : .9), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
+  for (let b = 0; b < 64; b++) {
+    const x = b / 63;
+    let v = kick * Math.max(0, 1 - x * 5) * .95;
+    v += (.35 + .15 * Math.sin(TAU * t * 2)) * Math.exp(-Math.pow((x - .18) / .07, 2)) * .8;
+    v += sn * Math.exp(-Math.pow((x - .5) / .18, 2)) * .8;
+    v += hat * Math.max(0, (x - .62) / .38) * .65;
+    v += .10 * (.5 + .5 * Math.sin(TAU * (t / 8 * (1 + b % 3)) + b)) * Math.exp(-Math.pow((x - .4) / .3, 2));
+    const jit = .88 + .12 * (Math.abs(Math.sin(b * 12.9898) * 43758.5453) % 1);
+    outArr[b] = Math.min(1, v * jit);
+  }
+}
+function synthLevels(t) {
+  const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
+  const kick = Math.exp(-bf * 7), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
+  return [.10 + .5 * kick + .30 * sn + .05 * hat, .10 + .5 * kick + .12 * sn + .22 * hat];
+}
+
+
+const tracks = [
+  { name: 'KICK',  v: 'kick',  c: '#ff4d8d', dec: 7,  k: 1.5, pat: [1,0,0,0, 1,0,0,0, 1,0,1,0, 1,0,0,0] },
+  { name: 'SNARE', v: 'snare', c: '#38bdf8', dec: 9,  k: 4,   pat: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0] },
+  { name: 'HAT',   v: 'hat',   c: '#fbbf24', dec: 22, k: 11,  pat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1] },
+  { name: 'CLAP',  v: 'clap',  c: '#a78bfa', dec: 12, k: 7,   pat: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0] }
+];
+// grade
+const seq = document.getElementById('seq'), nums = document.getElementById('nums'), cells = [];
+for (let s = 0; s < 16; s++) { const n = document.createElement('span'); n.textContent = s + 1; if (s && s % 4 === 0) n.className = 'g4'; nums.appendChild(n); }
+tracks.forEach((tr, i) => {
+  const row = document.createElement('div'); row.className = 'row';
+  const lab = document.createElement('div'); lab.className = 'lab'; lab.textContent = tr.name; lab.style.color = tr.c; row.appendChild(lab);
+  const wrap = document.createElement('div'); wrap.className = 'cells';
+  cells[i] = [];
+  for (let s = 0; s < 16; s++) {
+    const b = document.createElement('button'); b.className = 'cell' + (s && s % 4 === 0 ? ' g4' : ''); b.style.setProperty('--c', tr.c);
+    b.onclick = () => { tr.pat[s] = tr.pat[s] ? 0 : 1; if (tr.pat[s]) Engine.trig(tr.v); };
+    wrap.appendChild(b); cells[i][s] = b;
+  }
+  row.appendChild(wrap); seq.appendChild(row);
+});
+document.getElementById('rand').onclick = () => tracks.forEach((tr, i) => tr.pat = tr.pat.map((_, s) => Math.random() < [.28, .15, .55, .1][i] || (i === 0 && s % 4 === 0) ? 1 : 0));
+document.getElementById('clr').onclick = () => tracks.forEach(tr => tr.pat = tr.pat.map(() => 0));
+
+let live = false;
+const patFn = s => { const v = []; tracks.forEach(tr => { if (tr.pat[s]) v.push(tr.v); }); if (s % 4 === 0) v.push('bass:' + [55, 55, 65.41, 49][Math.floor(s / 4)]); return v; };
+btn.onclick = () => {
+  if (!live) { Engine.start(patFn); live = true; btn.textContent = '■ Voltar ao demo'; btn.classList.add('on'); modeEl.textContent = 'áudio ao vivo (Web Audio)'; }
+  else { Engine.stop(); live = false; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); modeEl.textContent = 'demo sintético'; }
+};
+
+const wv = document.getElementById('wave'), wx = wv.getContext('2d');
+function envOf(tr, t) {   // envelope do último acerto da trilha (determinístico)
+  const cur = Math.floor(t * 8 + 1e-6);
+  for (let k = 0; k < 24; k++) { const st = cur - k, idx = ((st % 16) + 16) % 16; if (tr.pat[idx]) return Math.exp(-(t - st / 8) * tr.dec); }
+  return 0;
+}
+let lastStep = -1;
+function render(t, liveLoop) {
+  const cs = Math.floor(t * 8 + 1e-6) % 16;
+  if (cs !== lastStep) {
+    for (let i = 0; i < 4; i++) { if (lastStep >= 0) cells[i][lastStep].classList.remove('cur'); cells[i][cs].classList.add('cur'); }
+    lastStep = cs;
+  }
+  tracks.forEach((tr, i) => { for (let s = 0; s < 16; s++) cells[i][s].classList.toggle('on', !!tr.pat[s]); });
+
+  const w = wv.width, h = wv.height, mid = h / 2;
+  wx.clearRect(0, 0, w, h);
+  wx.strokeStyle = 'rgba(160,180,255,.12)'; wx.lineWidth = 1;
+  for (let g = 1; g < 8; g++) { wx.beginPath(); wx.moveTo(g * w / 8, 0); wx.lineTo(g * w / 8, h); wx.stroke(); }
+  wx.beginPath(); wx.moveTo(0, mid); wx.lineTo(w, mid); wx.stroke();
+  const N = 420, sum = new Float32Array(N + 1);
+  tracks.forEach((tr, i) => {
+    const e = envOf(tr, t), amp = (.18 + .82 * e) * 130;
+    wx.save(); wx.strokeStyle = tr.c; wx.lineWidth = 3; wx.globalAlpha = .55 + .45 * e; wx.shadowColor = tr.c; wx.shadowBlur = 12 + 22 * e;
+    wx.beginPath();
+    for (let k = 0; k <= N; k++) {
+      const u = k / N, y = Math.sin(TAU * tr.k * u + TAU * (t * (1 + i * .5))) * amp * Math.sin(Math.PI * u) * (i === 0 ? 1 : .55);
+      sum[k] += y; const X = u * w, Y = mid - y;
+      k ? wx.lineTo(X, Y) : wx.moveTo(X, Y);
+    }
+    wx.stroke(); wx.restore();
+  });
+  wx.save(); wx.strokeStyle = '#fff'; wx.lineWidth = 4; wx.shadowColor = '#fff'; wx.shadowBlur = 16; wx.globalAlpha = .9; wx.beginPath();
+  for (let k = 0; k <= N; k++) { const X = k / N * w, Y = mid - Math.max(-140, Math.min(140, sum[k] * .5)); k ? wx.lineTo(X, Y) : wx.moveTo(X, Y); }
+  wx.stroke(); wx.restore();
+  tcEl.textContent = t.toFixed(2) + 's';
+}
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'demo sintético'; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

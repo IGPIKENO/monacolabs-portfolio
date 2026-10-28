@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio UI Motion · Dashboard fintech</title>
+<script src="vendor/gsap/gsap.min.js"></script>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#e9eefc;
+         background:radial-gradient(ellipse at 20% 0%,#10224a 0%,#070b17 55%,#04060d 100%)}
+  #side{position:absolute;left:0;top:0;bottom:0;width:110px;background:rgba(8,12,26,.8);border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;align-items:center;padding-top:44px;gap:26px}
+  #side i{display:block;width:44px;height:44px;border-radius:14px;background:rgba(150,170,220,.18)}
+  #side i.logo{background:linear-gradient(135deg,#4f7bff,#22d3ee);box-shadow:0 0 30px rgba(60,140,255,.5);margin-bottom:20px}
+  #side i.on{background:rgba(110,140,255,.35);box-shadow:inset 0 0 0 2px rgba(130,160,255,.6)}
+  #head{position:absolute;left:190px;top:56px;right:90px;display:flex;justify-content:space-between;align-items:center}
+  #head h1{margin:0;font-size:48px;font-weight:800;letter-spacing:-.02em}
+  #head p{margin:6px 0 0;font-size:22px;color:#8da0cf}
+  #head .r{display:flex;align-items:center;gap:20px}
+  .pill{padding:14px 26px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);font-size:21px;color:#9fb0da}
+  .av{width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#ffb36b,#ff6b9a)}
+  .card,.panel{position:absolute;border-radius:28px;background:linear-gradient(160deg,rgba(26,36,70,.78),rgba(12,18,38,.78));border:1px solid rgba(255,255,255,.08);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .card{top:190px;width:392px;height:190px;padding:26px 30px;box-sizing:border-box}
+  .card .k{font-size:21px;color:#8da0cf;font-weight:500}
+  .card .v{font-size:52px;font-weight:800;letter-spacing:-.02em;margin-top:10px;font-variant-numeric:tabular-nums}
+  .card .d{position:absolute;right:30px;top:26px;font-size:20px;font-weight:700;padding:6px 14px;border-radius:999px}
+  .up{background:rgba(52,211,153,.16);color:#6ee7b7}.dn{background:rgba(251,113,133,.16);color:#fda4af}
+  .card svg{position:absolute;left:30px;right:30px;bottom:18px;width:332px;height:48px}
+  .panel h3{margin:0;font-size:26px;font-weight:700}
+  .panel .sub{font-size:19px;color:#8da0cf;margin-top:4px}
+  #chartp{left:190px;top:410px;width:1000px;height:340px;padding:26px 34px;box-sizing:border-box}
+  #donutp{left:1214px;top:410px;width:616px;height:340px;padding:26px 34px;box-sizing:border-box}
+  #txp{left:190px;top:776px;width:1640px;height:262px;padding:22px 34px;box-sizing:border-box;overflow:hidden}
+  .tx{display:flex;align-items:center;height:52px;font-size:23px;overflow:hidden}
+  .tx .ic{width:38px;height:38px;border-radius:12px;margin-right:20px;flex:none}
+  .tx .n{flex:1;font-weight:600}.tx .c{width:300px;color:#8da0cf}.tx .a{width:200px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  #tip{position:absolute;display:none;padding:10px 16px;border-radius:12px;background:rgba(10,16,34,.95);border:1px solid rgba(120,160,255,.4);font-size:20px;font-weight:600;pointer-events:none;z-index:5}
+  #legend div{display:flex;align-items:center;font-size:22px;margin-bottom:14px;color:#cfd9f6}
+  #legend i{width:16px;height:16px;border-radius:50%;margin-right:14px}
+  #legend b{margin-left:auto;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="side"><i class="logo"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+  <div id="head">
+    <div><h1>Good evening, Alex</h1><p>Seu patrimônio está 4,2% acima do mês passado</p></div>
+    <div class="r"><div class="pill">Últimos 30 dias ▾</div><div class="av"></div></div>
+  </div>
+
+  <div class="card" id="c0" style="left:190px"><div class="k">Saldo total</div><span class="d up">+4,2%</span><div class="v" id="v0">$0.00</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#6ee7b7" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" style="left:606px"><div class="k">Receita mensal</div><span class="d up">+8,1%</span><div class="v" id="v1">$0</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" style="left:1022px"><div class="k">Despesas</div><span class="d dn">+2,3%</span><div class="v" id="v2">$0</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#fda4af" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" style="left:1438px"><div class="k">Taxa de poupança</div><span class="d up">+1,4 pp</span><div class="v" id="v3">0%</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#c4b5fd" stroke-width="3" stroke-linecap="round"/></svg></div>
+
+  <div class="panel" id="chartp">
+    <h3>Desempenho do portfólio</h3><div class="sub">Passe o mouse sobre o gráfico</div>
+    <svg id="chart" viewBox="0 0 932 230" style="position:absolute;left:34px;top:92px;width:932px;height:230px;overflow:visible">
+      <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f7bff" stop-opacity=".45"/><stop offset="1" stop-color="#4f7bff" stop-opacity="0"/></linearGradient>
+      <linearGradient id="lg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+      <g id="grid"></g><path id="area" fill="url(#ag)"/><path id="line" fill="none" stroke="url(#lg)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      <line id="cl" y1="0" y2="230" stroke="rgba(200,215,255,.5)" stroke-dasharray="5 6" style="display:none"/><circle id="cd" r="9" fill="#fff" style="display:none"/>
+      <rect id="hit" width="932" height="230" fill="transparent"/>
+    </svg>
+  </div>
+  <div class="panel" id="donutp">
+    <h3>Alocação</h3><div class="sub">Distribuição por classe de ativo</div>
+    <svg viewBox="0 0 200 200" style="position:absolute;left:30px;top:96px;width:210px;height:210px;transform:rotate(-90deg)"><g id="donut"></g></svg>
+    <div id="legend" style="position:absolute;left:270px;top:112px;right:34px"></div>
+  </div>
+  <div class="panel" id="txp"><h3 style="margin-bottom:8px">Transações recentes</h3><div id="txs"></div></div>
+  <div id="tip"></div>
+</div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const fmt = (n, d = 0) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// ---- dados sintéticos ----
+const N = 40, pts = Array.from({ length: N }, (_, i) => 100 + 26 * Math.sin(i / 4.6) + i * 2.1 + 9 * Math.sin(i * 1.9) + (i % 7) * 1.5);
+const cw = 932, ch = 230, mn = Math.min(...pts) - 6, mx = Math.max(...pts) + 6;
+const cx = i => i / (N - 1) * cw, cy = v => ch - (v - mn) / (mx - mn) * (ch - 10) - 4;
+function smooth(P) { let d = `M${P[0][0]},${P[0][1]}`; for (let i = 1; i < P.length; i++) { const [x0, y0] = P[i - 1], [x1, y1] = P[i], mx_ = (x0 + x1) / 2; d += ` C${mx_},${y0} ${mx_},${y1} ${x1},${y1}`; } return d; }
+const P = pts.map((v, i) => [cx(i), cy(v)]);
+$('#line').setAttribute('d', smooth(P));
+$('#area').setAttribute('d', smooth(P) + ` L${cw},${ch} L0,${ch} Z`);
+const LL = $('#line').getTotalLength(); $('#line').style.strokeDasharray = LL;
+for (let g = 0; g < 4; g++) { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); l.setAttribute('x1', 0); l.setAttribute('x2', cw); l.setAttribute('y1', g * 70 + 10); l.setAttribute('y2', g * 70 + 10); l.setAttribute('stroke', 'rgba(150,170,220,.12)'); $('#grid').appendChild(l); }
+$$('.sp').forEach((p, k) => { const a = Array.from({ length: 12 }, (_, i) => [i * 332 / 11, 24 - 16 * Math.sin(i * .7 + k * 1.3) - i * (k === 2 ? -.6 : 1.1)]); p.setAttribute('d', smooth(a)); p.style.strokeDasharray = p.getTotalLength(); });
+
+// donut
+const alloc = [['Ações', 46, '#4f7bff'], ['Cripto', 18, '#a78bfa'], ['Renda fixa', 24, '#22d3ee'], ['Caixa', 12, '#fbbf24']];
+const CIRC = 2 * Math.PI * 70, segs = [];
+let acc = 0;
+alloc.forEach(([n, p, c]) => {
+  const ci = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  ci.setAttribute('cx', 100); ci.setAttribute('cy', 100); ci.setAttribute('r', 70); ci.setAttribute('fill', 'none'); ci.setAttribute('stroke', c); ci.setAttribute('stroke-width', 26);
+  $('#donut').appendChild(ci); segs.push({ ci, p, off: acc }); acc += p;
+  const row = document.createElement('div'); row.innerHTML = `<i style="background:${c}"></i>${n}<b>${p}%</b>`; $('#legend').appendChild(row);
+});
+// transações
+const txd = [['Transferência da poupança', 'Entrada', '+$1,250.00', '#34d399', 1], ['Apple Store', 'Compras', '−$1,299.00', '#fda4af'], ['Nova Labs · Salário', 'Renda', '+$8,400.00', '#6ee7b7'], ['Netflix', 'Assinaturas', '−$15.99', '#fda4af'], ['Dividendo VTI', 'Investimentos', '+$312.40', '#6ee7b7']];
+txd.forEach(([n, c, a, col, isNew], i) => {
+  const r = document.createElement('div'); r.className = 'tx'; r.id = i === 0 ? 'newtx' : '';
+  r.innerHTML = `<div class="ic" style="background:${col}33;box-shadow:inset 0 0 0 2px ${col}66"></div><div class="n">${n}</div><div class="c">${c}</div><div class="a" style="color:${col}">${a}</div>`;
+  $('#txs').appendChild(r);
+});
+
+// tooltip interativo
+const tip = $('#tip');
+$('#hit').addEventListener('pointermove', e => {
+  const r = $('#chart').getBoundingClientRect(), sc = r.width / cw, x = Math.min(cw, Math.max(0, (e.clientX - r.left) / sc)), i = Math.round(x / cw * (N - 1));
+  $('#cl').style.display = $('#cd').style.display = 'block'; $('#cl').setAttribute('x1', cx(i)); $('#cl').setAttribute('x2', cx(i)); $('#cd').setAttribute('cx', cx(i)); $('#cd').setAttribute('cy', cy(pts[i]));
+  const cr = stage.getBoundingClientRect(), s2 = cr.width / W;
+  tip.style.display = 'block'; tip.textContent = `Dia ${i + 1} · ${fmt(pts[i] * 1000, 0)}`;
+  tip.style.left = ((e.clientX - cr.left) / s2 + 18) + 'px'; tip.style.top = ((e.clientY - cr.top) / s2 - 56) + 'px';
+});
+$('#hit').addEventListener('pointerleave', () => { $('#cl').style.display = $('#cd').style.display = tip.style.display = 'none'; });
+
+// ---- estado animado ----
+const S = { bal: 0, inc: 0, exp: 0, sav: 0, line: 0, donut: 0, out: 1, nt: 0 };
+function paint() {
+  $('#v0').textContent = fmt(S.bal, 2); $('#v1').textContent = fmt(S.inc); $('#v2').textContent = fmt(S.exp); $('#v3').textContent = S.sav.toFixed(1) + '%';
+  $('#line').style.strokeDashoffset = LL * (1 - S.line); $('#area').style.opacity = S.line;
+  segs.forEach(s => { const len = CIRC * s.p / 100 * S.donut - 3 * S.donut; s.ci.style.strokeDasharray = `${Math.max(0, len)} ${CIRC}`; s.ci.style.strokeDashoffset = -CIRC * s.off / 100 * S.donut; });
+  $$('.sp').forEach(p => p.style.strokeDashoffset = p.getTotalLength() * (1 - S.line));
+  $('#newtx').style.height = (52 * S.nt) + 'px'; $('#newtx').style.opacity = S.nt;
+  stage.style.opacity = S.out;
+}
+const tl = gsap.timeline({ paused: true });
+tl.fromTo('#side', { x: -110, opacity: 0 }, { x: 0, opacity: 1, duration: .7, ease: 'power3.out' }, 0)
+  .fromTo('#head > *', { y: -24, opacity: 0 }, { y: 0, opacity: 1, duration: .6, ease: 'power3.out', stagger: .1 }, .2)
+  .fromTo('.card', { y: 50, opacity: 0, scale: .96 }, { y: 0, opacity: 1, scale: 1, duration: .7, ease: 'power3.out', stagger: .1 }, .5)
+  .to(S, { bal: 128430.52, duration: 1.9, ease: 'power2.out' }, .6)
+  .to(S, { inc: 12840, duration: 1.6, ease: 'power2.out' }, .8)
+  .to(S, { exp: 6215, duration: 1.6, ease: 'power2.out' }, .9)
+  .to(S, { sav: 51.6, duration: 1.6, ease: 'power2.out' }, 1.0)
+  .fromTo('.panel', { y: 60, opacity: 0 }, { y: 0, opacity: 1, duration: .8, ease: 'power3.out', stagger: .14 }, 1.1)
+  .to(S, { line: 1, duration: 1.8, ease: 'power2.inOut' }, 1.5)
+  .to(S, { donut: 1, duration: 1.3, ease: 'power3.out' }, 2.1)
+  .fromTo('#legend div', { x: 24, opacity: 0 }, { x: 0, opacity: 1, duration: .5, stagger: .1, ease: 'power2.out' }, 2.5)
+  .fromTo('.tx:not(#newtx)', { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: .5, stagger: .12, ease: 'power3.out' }, 3.0)
+  .to(S, { nt: 1, duration: .7, ease: 'back.out(1.4)' }, 5.0)
+  .to(S, { bal: 129680.52, duration: .9, ease: 'power2.out' }, 5.1)
+  .fromTo('#c0', { boxShadow: '0 0 0 rgba(110,231,183,0)' }, { boxShadow: '0 0 60px rgba(110,231,183,.45)', duration: .35, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 5.1)
+  .to(S, { out: 0, duration: .65, ease: 'power2.in' }, 7.3)
+  .to({}, { duration: .001 }, D - .001);
+
+function render(t) { tl.time(t); paint(); }
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; render(((s % D) + D) % D); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

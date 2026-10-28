@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio UI Motion · Dock com física de mola</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#f2f5ff;
+         background:linear-gradient(135deg,#1a2a6c 0%,#5b2a86 45%,#c2417f 80%,#f2994a 100%);cursor:default}
+  .bl{position:absolute;border-radius:50%;filter:blur(110px);opacity:.55}
+  #menubar{position:absolute;left:0;right:0;top:0;height:54px;background:rgba(10,12,30,.35);backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 34px;font-size:23px;font-weight:600;gap:36px}
+  #menubar span.r{margin-left:auto;font-weight:500;opacity:.9}
+  #win{position:absolute;left:480px;top:170px;width:960px;height:560px;border-radius:30px;background:rgba(255,255,255,.12);backdrop-filter:blur(30px);border:1px solid rgba(255,255,255,.25);box-shadow:0 40px 100px rgba(0,0,0,.35)}
+  #win .tb{height:70px;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.14)}
+  #win .tb i{width:20px;height:20px;border-radius:50%;display:block}
+  #win .tb b{margin-left:20px;font-size:24px;font-weight:600;opacity:.85}
+  #win .ln{height:20px;border-radius:10px;background:rgba(255,255,255,.2);margin:34px 40px 0}
+  #dock{position:absolute;bottom:34px;height:122px;border-radius:44px;background:rgba(255,255,255,.17);backdrop-filter:blur(26px);border:1px solid rgba(255,255,255,.3);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .ic{position:absolute;bottom:17px;border-radius:22%;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(0,0,0,.35),inset 0 0 0 1.5px rgba(255,255,255,.25);cursor:pointer;overflow:hidden}
+  .ic svg{width:62%;height:62%}
+  .dot{position:absolute;bottom:5px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:#fff;opacity:0;box-shadow:0 0 8px rgba(255,255,255,.8)}
+  #lab{position:absolute;padding:12px 24px;border-radius:16px;background:rgba(20,22,40,.82);backdrop-filter:blur(10px);font-size:24px;font-weight:600;white-space:nowrap;border:1px solid rgba(255,255,255,.2);opacity:0}
+  #cur{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid #fff;background:rgba(255,255,255,.2);pointer-events:none;z-index:9;box-shadow:0 0 20px rgba(255,255,255,.4)}
+  #hud{position:absolute;left:44px;top:78px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.18em;color:rgba(255,255,255,.65);text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bl" style="width:700px;height:700px;left:-120px;top:-200px;background:#4f7bff"></div>
+  <div class="bl" style="width:640px;height:640px;right:-100px;top:200px;background:#ff5fa2"></div>
+  <div id="menubar"><span>●  Dock Motion</span><span style="font-weight:500">Arquivo</span><span style="font-weight:500">Editar</span><span style="font-weight:500">Visualizar</span><span class="r">Ter 27 out  12:30</span></div>
+  <div id="win"><div class="tb"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><b>Projetos</b></div>
+    <div class="ln" style="width:70%"></div><div class="ln" style="width:55%"></div><div class="ln" style="width:80%"></div><div class="ln" style="width:40%"></div></div>
+  <div id="dock"></div>
+  <div id="lab"></div>
+  <div id="cur"></div>
+  <div id="hud">Passe o mouse no dock · clique para saltar · <span id="tc">0.00s</span></div>
+</div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), dock = document.getElementById('dock'), lab = document.getElementById('lab'), cur = document.getElementById('cur');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+
+// ---- ícones (SVG simples, estilo consistente) ----
+const st = 'fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"';
+const apps = [
+  ['Finder', ['#3aa0ff', '#1f5fe0'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="17" ${st}/><path d="M16 29c5 5 11 5 16 0M17 18v4M31 18v4" ${st}/></svg>`],
+  ['Safari', ['#4cc9ff', '#2a74ff'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18" ${st}/><path d="M30 18l-4 8-8 4 4-8z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`],
+  ['Mail', ['#5db8ff', '#2f6bff'], `<svg viewBox="0 0 48 48"><rect x="7" y="12" width="34" height="24" rx="5" ${st}/><path d="M9 15l15 12 15-12" ${st}/></svg>`],
+  ['Música', ['#ff6b8b', '#e0245e'], `<svg viewBox="0 0 48 48"><path d="M19 34V14l16-4v20" ${st}/><circle cx="15" cy="34" r="5" fill="#fff"/><circle cx="31" cy="30" r="5" fill="#fff"/></svg>`],
+  ['Fotos', ['#ffd166', '#ff7a59'], `<svg viewBox="0 0 48 48"><g fill="#fff">${[0,1,2,3,4,5,6,7].map(i=>`<circle cx="${24+11*Math.cos(i*Math.PI/4)}" cy="${24+11*Math.sin(i*Math.PI/4)}" r="5" opacity=".92"/>`).join('')}</g></svg>`],
+  ['Notas', ['#ffe066', '#f5b301'], `<svg viewBox="0 0 48 48"><path d="M13 16h22M13 24h22M13 32h14" ${st}/></svg>`],
+  ['Terminal', ['#2b2f3a', '#0c0e14'], `<svg viewBox="0 0 48 48"><path d="M12 15l10 9-10 9M26 34h12" ${st}/></svg>`],
+  ['Ajustes', ['#a7b0c4', '#6a7389'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="7" ${st}/><path d="M24 7v6M24 35v6M7 24h6M35 24h6M12 12l4 4M32 32l4 4M36 12l-4 4M16 32l-4 4" ${st}/></svg>`],
+  ['Lixeira', ['#7f8aa3', '#4a526a'], `<svg viewBox="0 0 48 48"><path d="M14 16h20l-2 22H16zM11 16h26M19 16v-4h10v4" ${st}/></svg>`]
+];
+const N = apps.length, BASE = 90, GAP = 18, PAD = 26, SIG = 150, AMP = 1.0;
+const icons = apps.map(([name, [c1, c2], svg], i) => {
+  const d = document.createElement('div'); d.className = 'ic'; d.style.background = `linear-gradient(145deg,${c1},${c2})`; d.innerHTML = svg; dock.appendChild(d);
+  const dot = document.createElement('div'); dot.className = 'dot'; dock.appendChild(dot);
+  return { d, dot, name };
+});
+const baseW = N * BASE + (N - 1) * GAP, CX = W / 2;
+const restX = i => CX - baseW / 2 + i * (BASE + GAP) + BASE / 2;
+
+// ---- ponteiro: real (3 s de memória) ou cursor virtual periódico ----
+const ptr = { x: 0, y: 0, last: -1e9 };
+stage.addEventListener('pointermove', e => { const r = stage.getBoundingClientRect(); ptr.x = (e.clientX - r.left) / r.width * W; ptr.y = (e.clientY - r.top) / r.height * H; ptr.last = performance.now(); });
+const isReal = live => live && performance.now() - ptr.last < 3000;
+const cursorAt = (t, live) => isReal(live) ? [ptr.x, ptr.y] : [CX + Math.sin(TAU * t / D) * 650 * (.85 + .15 * Math.sin(TAU * 2 * t / D)), 1015 - 95 * (.5 - .5 * Math.cos(TAU * 2 * t / D + .6))];
+
+// cliques de demonstração (índice do app, instante)
+const demoClicks = [[3, 1.9], [6, 4.6]];
+const userClicks = []; // [i, tempoReal]
+stage.addEventListener('pointerdown', e => {
+  let best = -1, bd = 1e9; icons.forEach((o, i) => { const r = o.d.getBoundingClientRect(), cxm = r.left + r.width / 2; const d = Math.abs(e.clientX - cxm); if (e.clientY > r.top - 10 && d < r.width / 2 && d < bd) { bd = d; best = i; } });
+  if (best >= 0) userClicks.push([best, performance.now()]);
+});
+
+// ---- simulação de molas por ícone ----
+const sc = new Float32Array(N), sv = new Float32Array(N);
+function step(t, live, dt) {
+  const [cx, cy] = cursorAt(t, live);
+  const vf = clamp(1 - Math.max(0, 1050 - 130 - cy) / 260);   // perto do dock => magnificação plena
+  for (let i = 0; i < N; i++) {
+    const dx = restX(i) - cx, target = 1 + AMP * vf * Math.exp(-(dx * dx) / (SIG * SIG));
+    const a = 520 * (target - sc[i]) - 30 * sv[i];
+    sv[i] += a * dt; sc[i] += sv[i] * dt;
+  }
+}
+function bounceOf(i, t, live) {
+  let h = 0;
+  for (const [k, tc] of demoClicks) if (k === i && !isReal(live)) { const u = ((t - tc) % D + D) % D; if (u < 1.3) h = Math.max(h, 86 * Math.abs(Math.sin(Math.PI * u / .55)) * Math.exp(-u * 1.9)); }
+  if (live) for (const [k, tr] of userClicks) if (k === i) { const u = (performance.now() - tr) / 1000; if (u < 1.3) h = Math.max(h, 86 * Math.abs(Math.sin(Math.PI * u / .55)) * Math.exp(-u * 1.9)); }
+  return h;
+}
+let primed = false;
+function render(t, live) {
+  const dt = 1 / 120;
+  if (live && primed) { step(t, true, 1 / 60); }
+  else { sc.fill(1); sv.fill(0); for (let q = t - D; q < t; q += dt) step(((q % D) + D) % D, false, dt); }
+  primed = live;
+
+  // layout: soma das larguras escaladas, centrado
+  const wd = sc.map(s => BASE * s); let total = 0; for (const w of wd) total += w; total += GAP * (N - 1);
+  let x = CX - total / 2, best = 0, bs = 0;
+  dock.style.left = (CX - total / 2 - PAD) + 'px'; dock.style.width = (total + 2 * PAD) + 'px';
+  const dl = CX - total / 2 - PAD;
+  icons.forEach((o, i) => {
+    const w = wd[i], b = bounceOf(i, t, live);
+    o.d.style.width = o.d.style.height = w + 'px'; o.d.style.left = (x - dl) + 'px'; o.d.style.transform = `translateY(${-b}px)`;
+    o.dot.style.left = (x - dl + w / 2) + 'px';
+    const ran = (i === 0 || i === 1 || i === 4 || (demoClicks.some(([k, tc]) => k === i && t > tc) && !isReal(live)) || userClicks.some(([k]) => k === i));
+    o.dot.style.opacity = ran ? .95 : 0;
+    if (sc[i] > bs) { bs = sc[i]; best = i; }
+    o._cx = x + w / 2; o._top = H - 34 - 17 - w - b; x += w + GAP;
+  });
+  // rótulo do app sob o cursor
+  const o = icons[best];
+  lab.textContent = o.name; lab.style.opacity = clamp((bs - 1.35) * 2.2);
+  lab.style.left = (o._cx - lab.offsetWidth / 2) + 'px'; lab.style.top = (o._top - 64) + 'px';
+  // cursor virtual
+  const [cx, cy] = cursorAt(t, live); const real = isReal(live);
+  cur.style.opacity = real ? 0 : 1; cur.style.transform = `translate(${cx}px,${cy}px)`;
+  document.getElementById('tc').textContent = t.toFixed(2) + 's';
+}
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; primed = false; render(((s % D) + D) % D, false); };
+window.resume = () => { manual = false; primed = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

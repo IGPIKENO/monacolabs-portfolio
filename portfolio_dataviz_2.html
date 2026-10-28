@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio Dataviz · Candlesticks com execução de ordens</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#e9eefc;
+         background:radial-gradient(ellipse at 50% 20%,#0d1830 0%,#060912 65%,#02030a 100%)}
+  #cv{position:absolute;inset:0;width:1920px;height:1080px}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv" width="1920" height="1080"></canvas></div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, x) => a + (b - a) * x;
+const smooth = (a, b, x) => { x = clamp((x - a) / (b - a)); return x * x * (3 - 2 * x); };
+const UP = '#2dd4bf', DN = '#fb7185';
+
+// ---- dados SINTÉTICOS (gerador com semente; não são dados de mercado) ----
+const NC = 72;
+let seed = 20261027; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+const randn = () => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return (u - 3) / .7071; };
+const C = []; { let p = 100; for (let i = 0; i < NC; i++) { const o = p, c = o + randn() * 1.5 + Math.sin(i / 7) * .55 + .08, h = Math.max(o, c) + Math.abs(randn()) * .8, l = Math.min(o, c) - Math.abs(randn()) * .8, v = 40 + Math.abs(randn()) * 55 + Math.abs(c - o) * 22; C.push({ o, c, h, l, v }); p = c; } }
+const sma = i => { if (i < 19) return null; let s = 0; for (let k = i - 19; k <= i; k++) s += C[k].c; return s / 20; };
+// ordens de demonstração em pontos plausíveis: compra no fundo, venda no topo seguinte, nova compra
+const pick = (from, to, fn) => { let best = from; for (let i = from; i <= to; i++) if (fn(C[i].c, C[best].c)) best = i; return best; };
+const iB1 = pick(12, 34, (a, b) => a < b), iS = pick(iB1 + 8, 62, (a, b) => a > b), iB2 = pick(Math.min(NC - 4, iS + 3), NC - 3, (a, b) => a < b);
+const orders = [{ i: iB1, side: 'BUY' }, { i: iS, side: 'SELL' }, { i: iB2, side: 'BUY' }].map(o => ({ ...o, px: C[o.i].c }));
+
+// ---- layout ----
+const X0 = 110, X1 = 1690, PY0 = 250, PY1 = 740, VY0 = 780, VY1 = 930;
+const lo = Math.min(...C.map(c => c.l)) - 1.5, hi = Math.max(...C.map(c => c.h)) + 1.5, vmax = Math.max(...C.map(c => c.v));
+const cx = i => X0 + (i + .5) * (X1 - X0) / NC, py = p => PY1 - (p - lo) / (hi - lo) * (PY1 - PY0), vy = v => VY1 - v / vmax * (VY1 - VY0);
+const cw = (X1 - X0) / NC;
+const reveal = t => NC * (t < .4 ? 0 : (x => x * x * (3 - 2 * x))(clamp((t - .4) / 5.1)));
+const revealT = Array.from({ length: NC }, (_, i) => { for (let t = 0; t < D; t += 1 / 240) if (reveal(t) >= i + 1) return t; return D; });
+
+const mouse = { x: -1, y: -1 };
+cv.addEventListener('pointermove', e => { const r = stage.getBoundingClientRect(); mouse.x = (e.clientX - r.left) / r.width * W; mouse.y = (e.clientY - r.top) / r.height * H; });
+cv.addEventListener('pointerleave', () => { mouse.x = mouse.y = -1; });
+
+function render(t) {
+  const fin = smooth(0, .6, t) * (1 - smooth(7.3, 7.95, t));
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalAlpha = fin;
+  const rc = reveal(t), full = Math.floor(rc), frac = rc - full;
+  const last = Math.min(NC - 1, full - (frac === 0 ? 1 : 0));
+  // cabeçalho
+  const lc = last >= 0 ? (full < NC ? lerp(C[full].o, C[full].c, frac) : C[NC - 1].c) : C[0].o;
+  const first = C[0].o, chg = (lc / first - 1) * 100;
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff'; ctx.font = '800 54px Inter, sans-serif'; ctx.fillText('SIM / USD', 110, 110);
+  ctx.fillStyle = '#7f8fbd'; ctx.font = '500 26px Inter, sans-serif'; ctx.fillText('15m · estratégia de demonstração', 110, 152);
+  ctx.fillStyle = '#fff'; ctx.font = '800 76px Inter, sans-serif'; ctx.fillText(lc.toFixed(2), 700, 118);
+  ctx.fillStyle = chg >= 0 ? UP : DN; ctx.font = '700 32px Inter, sans-serif'; ctx.fillText((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%', 960, 116);
+  ctx.fillStyle = 'rgba(251,191,36,.16)'; ctx.strokeStyle = 'rgba(251,191,36,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(1380, 76, 310, 56, 28); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fbbf24'; ctx.font = '700 22px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('DADOS SIMULADOS', 1535, 112);
+  // grade e eixos
+  ctx.textAlign = 'left'; ctx.font = '500 21px ui-monospace, Consolas, monospace'; ctx.lineWidth = 1;
+  for (let k = 0; k <= 5; k++) { const p = lo + (hi - lo) * k / 5, y = py(p); ctx.strokeStyle = 'rgba(140,165,230,.10)'; ctx.beginPath(); ctx.moveTo(X0, y); ctx.lineTo(X1, y); ctx.stroke(); ctx.fillStyle = '#8da0cf'; ctx.fillText(p.toFixed(1), X1 + 18, y + 7); }
+  ctx.textAlign = 'center'; for (let k = 0; k < NC; k += 12) { ctx.fillStyle = '#6f80ad'; ctx.fillText(String(9 + Math.floor(k / 4)).padStart(2, '0') + ':' + String((k % 4) * 15).padStart(2, '0'), cx(k), 972); }
+  // volume + candles
+  const nShow = Math.min(NC, Math.ceil(rc));
+  for (let i = 0; i < nShow; i++) {
+    const c = C[i], f = i === full && full < NC ? frac : 1, close = lerp(c.o, c.c, f), hiP = lerp(c.o, c.h, Math.min(1, f * 1.4)), loP = lerp(c.o, c.l, Math.min(1, f * 1.4));
+    const col = close >= c.o ? UP : DN, x = cx(i);
+    ctx.fillStyle = col; ctx.globalAlpha = fin * .35; ctx.fillRect(x - cw * .35, vy(c.v * f), cw * .7, VY1 - vy(c.v * f)); ctx.globalAlpha = fin;
+    ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x, py(hiP)); ctx.lineTo(x, py(loP)); ctx.stroke();
+    const y1 = py(Math.max(c.o, close)), y2 = py(Math.min(c.o, close));
+    ctx.fillStyle = col; ctx.fillRect(x - cw * .36, y1, cw * .72, Math.max(3, y2 - y1));
+  }
+  // média móvel
+  ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 3.5; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 12; ctx.beginPath(); let started = false;
+  for (let i = 19; i < Math.min(NC, full); i++) { const m = sma(i); started ? ctx.lineTo(cx(i), py(m)) : ctx.moveTo(cx(i), py(m)); started = true; }
+  ctx.stroke(); ctx.shadowBlur = 0;
+  // ordens
+  let toastY = 800;
+  orders.forEach((o, k) => {
+    if (full <= o.i) return;
+    const tm = t - revealT[o.i], buy = o.side === 'BUY', col = buy ? UP : DN, x = cx(o.i), y = py(o.px) + (buy ? 46 : -46);
+    const pop = clamp(tm / .35), ring = clamp(tm / 1.0);
+    // marcador
+    ctx.save(); ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 24; ctx.globalAlpha = fin * pop;
+    ctx.beginPath(); if (buy) { ctx.moveTo(x, y - 18 * pop); ctx.lineTo(x - 15, y + 12); ctx.lineTo(x + 15, y + 12); } else { ctx.moveTo(x, y + 18 * pop); ctx.lineTo(x - 15, y - 12); ctx.lineTo(x + 15, y - 12); }
+    ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.globalAlpha = fin * (1 - ring) * .8; ctx.beginPath(); ctx.arc(x, py(o.px), 12 + ring * 46, 0, TAU); ctx.stroke(); ctx.globalAlpha = fin;
+    // linha de execução varrendo até o eixo
+    const sweep = clamp((tm - .15) / .6);
+    ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.globalAlpha = fin * .7 * (1 - smooth(1.6, 2.4, tm));
+    ctx.beginPath(); ctx.moveTo(x, py(o.px)); ctx.lineTo(x + (X1 - x) * sweep, py(o.px)); ctx.stroke(); ctx.restore();
+    if (sweep >= 1) { ctx.fillStyle = col; ctx.globalAlpha = fin * (1 - smooth(1.8, 2.6, tm)); ctx.beginPath(); ctx.roundRect(X1 + 6, py(o.px) - 20, 108, 40, 10); ctx.fill(); ctx.fillStyle = '#04120f'; ctx.font = '700 22px ui-monospace, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText(o.px.toFixed(2), X1 + 60, py(o.px) + 8); ctx.globalAlpha = fin; }
+    // toast
+    const a = smooth(.25, .6, tm) * (1 - smooth(2.2, 2.7, tm));
+    if (a > 0) {
+      const tx = lerp(W + 40, 1370, smooth(.25, .75, tm)) + (1 - a) * 0, ty = 1000 - 0;
+      ctx.save(); ctx.globalAlpha = fin * a; ctx.fillStyle = 'rgba(12,20,40,.96)'; ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.shadowColor = col; ctx.shadowBlur = 22;
+      ctx.beginPath(); ctx.roundRect(tx, 972 - 0, 470, 84, 20); ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.font = '800 28px Inter, sans-serif'; ctx.fillText((buy ? '▲ ' : '▼ ') + o.side + ' · FILLED', tx + 26, 1008);
+      ctx.fillStyle = '#c3cff0'; ctx.font = '500 22px ui-monospace, Consolas, monospace'; ctx.fillText('0.50 SIM @ ' + o.px.toFixed(2) + (o.side === 'SELL' ? '  ·  P/L ' + (((o.px / orders[0].px) - 1) * 100 >= 0 ? '+' : '') + (((o.px / orders[0].px) - 1) * 100).toFixed(2) + '%' : ''), tx + 26, 1040);
+      ctx.restore();
+    }
+  });
+  // crosshair interativo
+  if (mouse.x > X0 && mouse.x < X1 && mouse.y > PY0 && mouse.y < VY1) {
+    const i = clamp(Math.floor((mouse.x - X0) / cw), 0, NC - 1);
+    ctx.save(); ctx.strokeStyle = 'rgba(210,225,255,.45)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.globalAlpha = fin;
+    ctx.beginPath(); ctx.moveTo(cx(i), PY0); ctx.lineTo(cx(i), VY1); ctx.moveTo(X0, mouse.y); ctx.lineTo(X1, mouse.y); ctx.stroke(); ctx.restore();
+    if (i < rc) { const c = C[i]; ctx.fillStyle = 'rgba(10,16,34,.95)'; ctx.strokeStyle = 'rgba(150,180,255,.4)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(Math.min(mouse.x + 24, X1 - 330), PY0 + 10, 320, 150, 16); ctx.fill(); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.font = '500 22px ui-monospace, Consolas, monospace'; ctx.fillStyle = '#9fb0da'; const bx = Math.min(mouse.x + 24, X1 - 330) + 20;
+      [['O', c.o], ['H', c.h], ['L', c.l], ['C', c.c]].forEach(([k, v], j) => { ctx.fillStyle = '#8da0cf'; ctx.fillText(k, bx, PY0 + 48 + j * 31); ctx.fillStyle = '#fff'; ctx.fillText(v.toFixed(2), bx + 40, PY0 + 48 + j * 31); });
+      ctx.fillStyle = '#8da0cf'; ctx.fillText('VOL ' + c.v.toFixed(0), bx + 170, PY0 + 48); }
+  }
+  ctx.globalAlpha = 1;
+}
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; render(((s % D) + D) % D); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

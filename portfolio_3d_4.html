@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio 3D · Showcase de produto</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#020308;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#eef2ff;
+         background:radial-gradient(ellipse at 40% 45%,var(--bg1,#1b2547) 0%,var(--bg2,#080b18) 65%,#020308 100%);transition:background .4s}
+  #stage canvas{position:absolute;inset:0;width:1920px;height:1080px}
+  #brand{position:absolute;left:110px;top:90px}
+  #brand small{display:block;font-size:22px;font-weight:600;letter-spacing:.38em;color:#9db0e8;text-transform:uppercase}
+  #brand b{display:block;margin-top:14px;font-size:110px;font-weight:800;letter-spacing:-.03em;line-height:1}
+  #brand span{display:block;margin-top:16px;font-size:28px;color:#9aa9d4}
+  #panel{position:absolute;right:110px;top:210px;width:520px;padding:44px 46px;border-radius:34px;background:rgba(14,20,42,.55);backdrop-filter:blur(16px);
+         border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 90px rgba(0,0,0,.45)}
+  #panel h3{margin:0 0 30px;font-size:22px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:#9db0e8}
+  .row{margin-bottom:34px}
+  .row label{display:flex;justify-content:space-between;font-size:26px;margin-bottom:16px;color:#dfe6ff}
+  .row label i{font-style:normal;color:#8fa3e0;font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:10px;border-radius:5px;background:rgba(255,255,255,.12);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:32px;height:32px;border-radius:50%;background:#fff;box-shadow:0 0 18px rgba(130,160,255,.9);cursor:pointer}
+  .sw{display:flex;gap:18px}
+  .sw button{width:58px;height:58px;border-radius:50%;border:3px solid transparent;cursor:pointer;outline:none;box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+  .sw button.on{border-color:#fff;box-shadow:0 0 22px rgba(255,255,255,.4)}
+  #hud{position:absolute;left:110px;bottom:60px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.2em;color:rgba(157,176,232,.65);text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="brand"><small>Modelado no Blender · glTF</small><b>Ambre Noir</b><span>Showcase 3D com iluminação de estúdio ajustável</span></div>
+  <div id="panel">
+    <h3>Estúdio</h3>
+    <div class="row"><label>Luz principal <i id="vKey">1.0</i></label><input id="key" type="range" min="0" max="3" step="0.05" value="1.4"></div>
+    <div class="row"><label>Temperatura <i id="vTemp">quente</i></label><input id="temp" type="range" min="0" max="1" step="0.01" value="0.3"></div>
+    <div class="row"><label>Rotação <i id="vSpin">1×</i></label><input id="spin" type="range" min="0" max="2" step="1" value="1"></div>
+    <div class="row"><label>Líquido</label><div class="sw" id="swLiquid"></div></div>
+    <div class="row" style="margin-bottom:0"><label>Fundo</label><div class="sw" id="swBg"></div></div>
+  </div>
+  <div id="hud">Arraste os controles · <span id="tc">0.00s</span></div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three/build/three.module.js';
+import { GLTFLoader } from './vendor/three/examples/jsm/loaders/GLTFLoader.js';
+import { RoomEnvironment } from './vendor/three/examples/jsm/environments/RoomEnvironment.js';
+
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), tcEl = document.getElementById('tc');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.7;
+const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+camera.position.set(-2.3, 2.1, 9.6); camera.lookAt(-2.3, 1.45, 0);
+
+// luzes de estúdio: principal (sombra), preenchimento e contraluz
+const key = new THREE.SpotLight(0xffe2c4, 220, 30, 0.5, 0.7, 1.4); key.position.set(-4.5, 6.5, 5); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004; key.shadow.radius = 6; scene.add(key);
+const fill = new THREE.PointLight(0x7aa2ff, 60, 20, 1.6); fill.position.set(4, 2.5, 4); scene.add(fill);
+const rim = new THREE.PointLight(0xff8ad8, 90, 20, 1.6); rim.position.set(0.5, 3, -5); scene.add(rim);
+
+// plataforma + piso que recebe sombra
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.12, 96),
+  new THREE.MeshStandardMaterial({ color: 0x0c0f1c, metalness: 0.9, roughness: 0.22 }));
+disc.position.y = -0.06; disc.receiveShadow = true; scene.add(disc);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.4 }));
+floor.rotation.x = -Math.PI / 2; floor.position.y = -0.121; floor.receiveShadow = true; scene.add(floor);
+
+const pivot = new THREE.Group(); pivot.position.x = -2.3; scene.add(pivot);
+const parts = {};
+const state = { keyI: 1.4, temp: 0.3, spin: 1, touched: false };
+
+new GLTFLoader().load('assets/perfume.glb', gltf => {
+  const model = gltf.scene;
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = true; o.receiveShadow = true; parts[o.name] = o;
+    if (o.name === 'Body') o.material = new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0, roughness: 0.02, transmission: 1, thickness: 0.6, ior: 1.45, attenuationColor: 0xe8f4ff, attenuationDistance: 12, specularIntensity: 1, envMapIntensity: 1.0 });
+    if (o.name === 'Liquid') o.material = new THREE.MeshPhysicalMaterial({ color: 0xd96a0a, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1, envMapIntensity: 0.45, emissive: 0x401a00, emissiveIntensity: 0.25 });
+    if (o.name === 'Collar') o.material = new THREE.MeshStandardMaterial({ color: 0xd9b872, metalness: 1, roughness: 0.18 });
+    if (o.name === 'Cap') o.material = new THREE.MeshStandardMaterial({ color: 0x0b0b10, metalness: 0.95, roughness: 0.22 });
+    if (o.name === 'Label') o.material = new THREE.MeshStandardMaterial({ color: 0xf6f4ee, roughness: 0.6 });
+  });
+  pivot.add(model); loaded = true; window.__ready = true;
+});
+let loaded = false;
+
+// ---- UI ----
+const $ = id => document.getElementById(id);
+const liquids = [['#f08c1e', 0x401a00], ['#ff5a8a', 0x400a1c], ['#2fd9a0', 0x043a28], ['#8a6bff', 0x1a0a50]];
+const bgs = [['#1b2547', '#080b18'], ['#3a1b47', '#12081c'], ['#0f3a3a', '#04141a'], ['#2b2b2b', '#0a0a0a']];
+function swatches(el, list, onPick) {
+  list.forEach((c, i) => {
+    const b = document.createElement('button'); b.style.background = Array.isArray(c) ? `radial-gradient(circle at 35% 30%, ${c[0]}, ${c[1]})` : c;
+    b.onclick = () => { [...el.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); onPick(i); state.touched = true; };
+    if (i === 0) b.classList.add('on'); el.appendChild(b);
+  });
+}
+swatches($('swLiquid'), liquids.map(l => l[0]), i => { if (parts.Liquid) { parts.Liquid.material.color.set(liquids[i][0]); parts.Liquid.material.emissive.set(liquids[i][1]); } });
+swatches($('swBg'), bgs.map(b => [b[0], b[1]]), i => { stage.style.setProperty('--bg1', bgs[i][0]); stage.style.setProperty('--bg2', bgs[i][1]); });
+const spinNames = ['parado', '1×', '2×'];
+function readUI() {
+  state.keyI = +$('key').value; state.temp = +$('temp').value; state.spin = +$('spin').value;
+  $('vKey').textContent = state.keyI.toFixed(1); $('vTemp').textContent = state.temp < .35 ? 'quente' : state.temp > .65 ? 'fria' : 'neutra'; $('vSpin').textContent = spinNames[state.spin];
+}
+['key', 'temp', 'spin'].forEach(id => $(id).addEventListener('input', () => { state.touched = true; readUI(); }));
+readUI();
+
+const warm = new THREE.Color(0xffc896), cool = new THREE.Color(0xbcd8ff);
+function render(t, live) {
+  if (!loaded) return;
+  const ph = TAU * t / D;
+  // sem interação: a luz "respira" em loop de 8 s para o seek ser determinístico
+  const kI = state.touched ? state.keyI : 1.4 + 0.5 * Math.sin(ph * 2);
+  const tp = state.touched ? state.temp : 0.5 + 0.5 * Math.sin(ph);
+  key.intensity = 220 * kI / 1.4; key.color.copy(warm).lerp(cool, tp);
+  key.position.x = -4.5 + Math.sin(ph) * 1.2;
+  pivot.rotation.y = ph * state.spin;
+  pivot.position.y = 0.04 * Math.sin(ph * 2);
+  renderer.render(scene, camera);
+  tcEl.textContent = t.toFixed(2) + 's';
+}
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; render(((s % D) + D) % D, false); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>

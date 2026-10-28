@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio Áudio · EQ paramétrico</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#eaf1ff;
+         background:radial-gradient(ellipse at 50% 30%,#121c3e 0%,#060811 70%)}
+  #cv{position:absolute;inset:0;width:1920px;height:1080px;touch-action:none}
+  #title{position:absolute;left:120px;top:64px;pointer-events:none}
+  #title b{display:block;font-size:60px;font-weight:800;letter-spacing:-.02em}
+  #title span{display:block;margin-top:8px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.2em;color:rgba(125,211,252,.75);text-transform:uppercase}
+  #btn{position:absolute;right:120px;top:72px;padding:20px 34px;border-radius:999px;font:700 24px 'Inter',sans-serif;color:#fff;border:0;cursor:pointer;
+       background:linear-gradient(135deg,#2dd4ff,#8b5cf6);box-shadow:0 0 40px rgba(80,160,255,.45)}
+  #btn.on{background:linear-gradient(135deg,#ff4d8d,#ff9a3c)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="1920" height="1080"></canvas>
+  <div id="title"><b>Parametric EQ</b><span>5 bandas · arraste os pontos · roda do mouse = Q · <i id="mode" style="font-style:normal">demo sintético</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <button id="btn">▶ Ativar áudio ao vivo</button>
+</div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const tcEl = document.getElementById('tc'), modeEl = document.getElementById('mode'), btn = document.getElementById('btn');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+
+// ===== Motor de áudio procedural (Web Audio) + modelos sintéticos determinísticos =====
+// Sem arquivos externos: bateria, baixo e analisadores nascem de osciladores/ruído.
+// Modo "demo": curvas sintéticas puras de t (loop de 8 s, funcionam com seek).
+// Modo "ao vivo": após um clique do usuário, AnalyserNodes reais alimentam as visualizações.
+const Engine = (() => {
+  let ac, bus, master, an, anL, anR, started = false, timer = null, nextT = 0, step = 0, noiseBuf, pattern = null, eq = [];
+  const edges = Array.from({ length: 65 }, (_, i) => 40 * Math.pow(16000 / 40, i / 64));
+  const defaultPattern = s => {
+    const v = [];
+    if (s % 4 === 0) v.push('kick');
+    if (s === 10) v.push('kick');
+    if (s === 4 || s === 12) v.push('snare');
+    if (s % 2 === 0) v.push(s === 14 ? 'hatO' : 'hat');
+    const bn = { 0: 55, 3: 65.41, 6: 55, 10: 73.42, 12: 61.74 };
+    if (bn[s]) v.push('bass:' + bn[s]);
+    return v;
+  };
+  const noise = () => { const b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
+  const env = (g, t, a, peak, d) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); };
+  const out = pan => { const p = ac.createStereoPanner(); p.pan.value = pan; p.connect(bus); return p; };
+  const nz = (t, ftype, f, q, a, pk, d, pan, dur) => {
+    const n = ac.createBufferSource(); n.buffer = noiseBuf; const fl = ac.createBiquadFilter(); fl.type = ftype; fl.frequency.value = f; fl.Q.value = q;
+    const g = ac.createGain(); env(g, t, a, pk, d); n.connect(fl); fl.connect(g); g.connect(out(pan)); n.start(t, Math.random() * .5); n.stop(t + dur);
+  };
+  const V = {
+    kick(t) { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(42, t + .12); env(g, t, .003, .95, .32); o.connect(g); g.connect(out(0)); o.start(t); o.stop(t + .4); },
+    snare(t) { nz(t, 'bandpass', 1800, .8, .002, .55, .17, -.25, .25); const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(140, t + .08); const g = ac.createGain(); env(g, t, .002, .4, .1); o.connect(g); g.connect(out(-.25)); o.start(t); o.stop(t + .15); },
+    hat(t) { nz(t, 'highpass', 7000, .7, .001, .3, .05, .3, .2); },
+    hatO(t) { nz(t, 'highpass', 7000, .7, .001, .3, .18, .3, .3); },
+    clap(t) { for (let k = 0; k < 3; k++) nz(t + k * .011, 'bandpass', 1200, 1.2, .001, .35, k === 2 ? .14 : .02, .15, .2); },
+    bass(t, f) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.setValueAtTime(900, t); fl.frequency.exponentialRampToValueAtTime(180, t + .22); const g = ac.createGain(); env(g, t, .005, .45, .24); o.connect(fl); fl.connect(g); g.connect(out(0)); o.start(t); o.stop(t + .3); }
+  };
+  const trig = (name, t) => { if (name.startsWith('bass:')) V.bass(t, +name.slice(5)); else if (V[name]) V[name](t); };
+  function sched() { while (nextT < ac.currentTime + .14) { for (const v of pattern(step % 16)) trig(v, nextT); nextT += .125; step++; } }
+  return {
+    get started() { return started; },
+    get ctx() { return ac; },
+    get eq() { return eq; },
+    trig: (name) => { if (started) trig(name, ac.currentTime + .005); },
+    start(patternFn) {
+      if (patternFn) pattern = patternFn; else if (!pattern) pattern = defaultPattern;
+      if (started) { ac.resume(); return; }
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      bus = ac.createGain(); let prev = bus;
+      eq = [0, 1, 2, 3, 4].map(() => { const f = ac.createBiquadFilter(); f.type = 'peaking'; f.frequency.value = 1000; f.gain.value = 0; prev.connect(f); prev = f; return f; });
+      master = ac.createGain(); master.gain.value = .85; prev.connect(master);
+      an = ac.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = .72; master.connect(an); an.connect(ac.destination);
+      const sp = ac.createChannelSplitter(2); master.connect(sp);
+      anL = ac.createAnalyser(); anR = ac.createAnalyser(); anL.fftSize = anR.fftSize = 1024; sp.connect(anL, 0); sp.connect(anR, 1);
+      noiseBuf = noise(); started = true; ac.resume(); nextT = ac.currentTime + .08; step = 0; timer = setInterval(sched, 25);
+    },
+    stop() { if (!started) return; clearInterval(timer); ac.suspend(); started = false; ac.close(); },
+    // 64 bandas logarítmicas (40 Hz–16 kHz), valores 0..1
+    spectrum(outArr) {
+      if (!started) return false;
+      const u = new Uint8Array(an.frequencyBinCount), nyq = ac.sampleRate / 2, n = u.length; an.getByteFrequencyData(u);
+      for (let b = 0; b < 64; b++) { const lo = Math.floor(edges[b] / nyq * n), hi = Math.max(lo + 1, Math.ceil(edges[b + 1] / nyq * n)); let m = 0; for (let k = lo; k < hi && k < n; k++) m = Math.max(m, u[k]); outArr[b] = Math.pow(m / 255, 1.6); }
+      return true;
+    },
+    levels() {
+      if (!started) return null;
+      const a = new Float32Array(anL.fftSize), b = new Float32Array(anR.fftSize); anL.getFloatTimeDomainData(a); anR.getFloatTimeDomainData(b);
+      const rms = x => { let s = 0; for (const v of x) s += v * v; return Math.sqrt(s / x.length); };
+      return [rms(a), rms(b)];
+    }
+  };
+})();
+
+// Modelos sintéticos puros de t (120 BPM; período de 8 s => loop perfeito)
+function synthSpec(t, outArr) {
+  const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
+  const kick = Math.exp(-bf * 7) * (bi % 4 === 0 ? 1 : .9), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
+  for (let b = 0; b < 64; b++) {
+    const x = b / 63;
+    let v = kick * Math.max(0, 1 - x * 5) * .95;
+    v += (.35 + .15 * Math.sin(TAU * t * 2)) * Math.exp(-Math.pow((x - .18) / .07, 2)) * .8;
+    v += sn * Math.exp(-Math.pow((x - .5) / .18, 2)) * .8;
+    v += hat * Math.max(0, (x - .62) / .38) * .65;
+    v += .10 * (.5 + .5 * Math.sin(TAU * (t / 8 * (1 + b % 3)) + b)) * Math.exp(-Math.pow((x - .4) / .3, 2));
+    const jit = .88 + .12 * (Math.abs(Math.sin(b * 12.9898) * 43758.5453) % 1);
+    outArr[b] = Math.min(1, v * jit);
+  }
+}
+function synthLevels(t) {
+  const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
+  const kick = Math.exp(-bf * 7), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
+  return [.10 + .5 * kick + .30 * sn + .05 * hat, .10 + .5 * kick + .12 * sn + .22 * hat];
+}
+
+
+let live = false;
+btn.onclick = () => {
+  if (!live) { Engine.start(); live = true; btn.textContent = '■ Voltar ao demo'; btn.classList.add('on'); modeEl.textContent = 'áudio ao vivo (Web Audio)'; eqTypes(); }
+  else { Engine.stop(); live = false; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); modeEl.textContent = 'demo sintético'; }
+};
+
+// ---- bandas do EQ ----
+const bands = [
+  { type: 'lowshelf',  f: 80,    g: 4,  q: .7,  c: '#38bdf8' },
+  { type: 'peaking',   f: 250,   g: -3, q: 1.1, c: '#34d399' },
+  { type: 'peaking',   f: 1000,  g: 2,  q: 1.2, c: '#fbbf24' },
+  { type: 'peaking',   f: 3500,  g: -4, q: 1.5, c: '#f472b6' },
+  { type: 'highshelf', f: 10000, g: 5,  q: .7,  c: '#a78bfa' }
+];
+const base = bands.map(b => ({ ...b }));
+let touched = false;
+function eqTypes() { Engine.eq.forEach((f, i) => { f.type = bands[i].type; }); }
+
+// resposta em frequência (biquad RBJ analítico, igual ao do Web Audio)
+function coeffs(b, fs = 48000) {
+  const A = Math.pow(10, b.g / 40), w0 = TAU * b.f / fs, cs = Math.cos(w0), sn = Math.sin(w0);
+  if (b.type === 'peaking') {
+    const al = sn / (2 * b.q);
+    return [1 + al * A, -2 * cs, 1 - al * A, 1 + al / A, -2 * cs, 1 - al / A];
+  }
+  const al = sn / 2 * Math.SQRT2, be = 2 * Math.sqrt(A) * al;
+  if (b.type === 'lowshelf') return [A * ((A + 1) - (A - 1) * cs + be), 2 * A * ((A - 1) - (A + 1) * cs), A * ((A + 1) - (A - 1) * cs - be),
+    (A + 1) + (A - 1) * cs + be, -2 * ((A - 1) + (A + 1) * cs), (A + 1) + (A - 1) * cs - be];
+  return [A * ((A + 1) + (A - 1) * cs + be), -2 * A * ((A - 1) + (A + 1) * cs), A * ((A + 1) + (A - 1) * cs - be),
+    (A + 1) - (A - 1) * cs + be, 2 * ((A - 1) - (A + 1) * cs), (A + 1) - (A - 1) * cs - be];
+}
+function magDb(c, f, fs = 48000) {
+  const w = TAU * f / fs, c1 = Math.cos(w), c2 = Math.cos(2 * w);
+  const [b0, b1, b2, a0, a1, a2] = c;
+  const n = b0 * b0 + b1 * b1 + b2 * b2 + 2 * (b0 * b1 + b1 * b2) * c1 + 2 * b0 * b2 * c2;
+  const d = a0 * a0 + a1 * a1 + a2 * a2 + 2 * (a0 * a1 + a1 * a2) * c1 + 2 * a0 * a2 * c2;
+  return 10 * Math.log10(n / d);
+}
+
+// ---- layout do gráfico ----
+const X0 = 220, X1 = 1760, Y0 = 250, Y1 = 790, FMIN = 20, FMAX = 20000, DB = 18;
+const fx = f => X0 + (Math.log10(f) - Math.log10(FMIN)) / (Math.log10(FMAX) - Math.log10(FMIN)) * (X1 - X0);
+const xf = x => Math.pow(10, Math.log10(FMIN) + (x - X0) / (X1 - X0) * (Math.log10(FMAX) - Math.log10(FMIN)));
+const gy = g => Y0 + (DB - g) / (2 * DB) * (Y1 - Y0);
+const yg = y => DB - (y - Y0) / (Y1 - Y0) * 2 * DB;
+const bandX = b => fx(40 * Math.pow(16000 / 40, (b + .5) / 64));
+
+// ---- interação ----
+let drag = -1;
+const toStage = e => { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+cv.addEventListener('pointerdown', e => {
+  const [x, y] = toStage(e); let best = -1, bd = 60;
+  bands.forEach((b, i) => { const d = Math.hypot(fx(b.f) - x, gy(b.g) - y); if (d < bd) { bd = d; best = i; } });
+  if (best >= 0) { drag = best; touched = true; cv.setPointerCapture(e.pointerId); }
+});
+cv.addEventListener('pointermove', e => {
+  if (drag < 0) return; const [x, y] = toStage(e), b = bands[drag];
+  b.f = Math.min(FMAX * .98, Math.max(FMIN * 1.05, xf(Math.min(X1, Math.max(X0, x))))); b.g = Math.max(-DB, Math.min(DB, yg(Math.min(Y1, Math.max(Y0, y)))));
+});
+cv.addEventListener('pointerup', () => { drag = -1; });
+cv.addEventListener('wheel', e => {
+  e.preventDefault(); const [x, y] = toStage(e); let best = -1, bd = 90;
+  bands.forEach((b, i) => { const d = Math.hypot(fx(b.f) - x, gy(b.g) - y); if (d < bd) { bd = d; best = i; } });
+  if (best >= 0) { touched = true; const b = bands[best]; b.q = Math.min(8, Math.max(.3, b.q * (e.deltaY < 0 ? 1.12 : .89))); }
+}, { passive: false });
+
+function demoBands(t) {   // sem interação: nós oscilam em loop de 8 s (frequências inteiras)
+  const ph = TAU * t / D;
+  bands.forEach((b, i) => {
+    b.f = base[i].f * Math.pow(2, .7 * Math.sin(ph * (1 + i % 2) + i));
+    b.g = base[i].g + 6 * Math.sin(ph * (1 + (i + 1) % 3) + i * 1.7);
+    b.q = base[i].q * (1 + .25 * Math.sin(ph * 2 + i));
+  });
+}
+
+const spec = new Float32Array(64), pts = 360;
+function render(t, liveLoop) {
+  if (!touched) demoBands(t);
+  if (live && Engine.started) Engine.eq.forEach((f, i) => { f.frequency.value = bands[i].f; f.gain.value = bands[i].g; f.Q.value = bands[i].q; });
+  const cf = bands.map(b => coeffs(b));
+  const resp = new Float32Array(pts), fr = new Float32Array(pts);
+  for (let k = 0; k < pts; k++) { const f = FMIN * Math.pow(FMAX / FMIN, k / (pts - 1)); fr[k] = f; let s = 0; for (const c of cf) s += magDb(c, f); resp[k] = s; }
+
+  ctx.clearRect(0, 0, W, H);
+  // painel
+  ctx.fillStyle = 'rgba(12,18,40,.6)'; ctx.strokeStyle = 'rgba(140,170,255,.18)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.roundRect(X0 - 80, Y0 - 50, X1 - X0 + 160, Y1 - Y0 + 120, 28); ctx.fill(); ctx.stroke();
+  // grade
+  ctx.font = '500 22px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (const g of [-18, -12, -6, 0, 6, 12, 18]) {
+    ctx.strokeStyle = g === 0 ? 'rgba(160,190,255,.45)' : 'rgba(140,170,255,.12)'; ctx.lineWidth = g === 0 ? 2 : 1;
+    ctx.beginPath(); ctx.moveTo(X0, gy(g)); ctx.lineTo(X1, gy(g)); ctx.stroke();
+    ctx.fillStyle = 'rgba(170,190,235,.7)'; ctx.fillText((g > 0 ? '+' : '') + g + ' dB', X0 - 20, gy(g));
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const f of [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]) {
+    ctx.strokeStyle = 'rgba(140,170,255,.10)'; ctx.beginPath(); ctx.moveTo(fx(f), Y0); ctx.lineTo(fx(f), Y1); ctx.stroke();
+    ctx.fillStyle = 'rgba(170,190,235,.7)'; ctx.fillText(f >= 1000 ? (f / 1000) + 'k' : f, fx(f), Y1 + 14);
+  }
+  // espectro (pós-EQ) de fundo
+  if (live && Engine.started) Engine.spectrum(spec); else synthSpec(t, spec);
+  const mid = (Y0 + Y1) / 2;
+  const sg = ctx.createLinearGradient(0, Y1, 0, Y0); sg.addColorStop(0, 'rgba(56,189,248,.05)'); sg.addColorStop(1, 'rgba(167,139,250,.45)');
+  ctx.beginPath(); ctx.moveTo(bandX(0), Y1);
+  for (let b = 0; b < 64; b++) {
+    const f = 40 * Math.pow(16000 / 40, (b + .5) / 64);
+    let v = spec[b]; if (!(live && Engine.started)) { const k = Math.min(pts - 1, Math.round(Math.log(f / FMIN) / Math.log(FMAX / FMIN) * (pts - 1))); v *= Math.pow(10, resp[k] / 20); }
+    ctx.lineTo(bandX(b), Y1 - Math.min(1.2, v) * (Y1 - Y0) * .62);
+  }
+  ctx.lineTo(bandX(63), Y1); ctx.closePath(); ctx.fillStyle = sg; ctx.fill();
+  // curva do EQ (glow)
+  const lg = ctx.createLinearGradient(X0, 0, X1, 0); lg.addColorStop(0, '#38bdf8'); lg.addColorStop(.5, '#f0abfc'); lg.addColorStop(1, '#a78bfa');
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const [w, a, blur] of [[14, .18, 22], [8, .35, 10], [4, 1, 0]]) {
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = lg; ctx.lineWidth = w; if (blur) { ctx.shadowColor = '#c084fc'; ctx.shadowBlur = blur; }
+    ctx.beginPath(); for (let k = 0; k < pts; k++) { const x = fx(fr[k]), y = gy(Math.max(-DB, Math.min(DB, resp[k]))); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.restore();
+  }
+  // nós
+  bands.forEach((b, i) => {
+    const x = fx(b.f), y = gy(b.g);
+    ctx.save(); ctx.shadowColor = b.c; ctx.shadowBlur = i === drag ? 40 : 24; ctx.fillStyle = b.c;
+    ctx.beginPath(); ctx.arc(x, y, i === drag ? 20 : 16, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#05070f'; ctx.font = '700 18px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(i + 1, x, y + 1);
+    ctx.strokeStyle = b.c; ctx.globalAlpha = .35; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(x, y + 22); ctx.lineTo(x, Y1); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  });
+  // cartões das bandas
+  const cw = 292, gap = 20, cx0 = (W - (5 * cw + 4 * gap)) / 2;
+  bands.forEach((b, i) => {
+    const x = cx0 + i * (cw + gap), y = 880;
+    ctx.fillStyle = 'rgba(14,20,44,.75)'; ctx.strokeStyle = b.c + '66'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(x, y, cw, 130, 22); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = b.c; ctx.beginPath(); ctx.arc(x + 34, y + 36, 11, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#cfd9ff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '600 22px Inter, sans-serif';
+    ctx.fillText(['Low shelf', 'Bell 1', 'Bell 2', 'Bell 3', 'High shelf'][i], x + 58, y + 36);
+    ctx.font = '500 26px ui-monospace, Consolas, monospace'; ctx.fillStyle = '#fff';
+    ctx.fillText((b.f >= 1000 ? (b.f / 1000).toFixed(2) + ' kHz' : Math.round(b.f) + ' Hz'), x + 26, y + 84);
+    ctx.fillStyle = b.g >= 0 ? '#86efac' : '#fda4af'; ctx.textAlign = 'right';
+    ctx.fillText((b.g >= 0 ? '+' : '') + b.g.toFixed(1) + ' dB', x + cw - 24, y + 84);
+    ctx.fillStyle = 'rgba(170,190,235,.7)'; ctx.font = '500 20px ui-monospace, Consolas, monospace'; ctx.fillText('Q ' + b.q.toFixed(2), x + cw - 24, y + 36);
+  });
+  tcEl.textContent = t.toFixed(2) + 's';
+}
+
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'demo sintético'; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
+if (document.fonts) document.fonts.ready.then(() => {});
+window.__ready = true;
+</script>
+</body>
+</html>

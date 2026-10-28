@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio Dataviz · Monitor de agentes de IA</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#e9eefc;
+         background:radial-gradient(ellipse at 35% 40%,#0c1a3a 0%,#050812 65%,#02030a 100%)}
+  #cv{position:absolute;inset:0;width:1920px;height:1080px}
+  #title{position:absolute;left:80px;top:56px;pointer-events:none}
+  #title b{display:block;font-size:54px;font-weight:800;letter-spacing:-.02em}
+  #title span{display:block;margin-top:6px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.2em;color:rgba(110,231,183,.8);text-transform:uppercase}
+  #side{position:absolute;right:70px;top:56px;width:520px;bottom:56px;border-radius:32px;background:linear-gradient(160deg,rgba(20,30,62,.8),rgba(8,12,28,.85));border:1px solid rgba(255,255,255,.09);padding:34px 38px;box-sizing:border-box;box-shadow:0 30px 80px rgba(0,0,0,.4)}
+  .kp{display:flex;gap:16px;margin-bottom:18px}
+  .kp div{flex:1;padding:18px 20px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+  .kp small{display:block;font-size:17px;color:#8da0cf;margin-bottom:6px}
+  .kp b{font-size:38px;font-weight:800;font-variant-numeric:tabular-nums}
+  #spk{width:444px;height:90px;margin:2px 0 14px;display:block}
+  #logh{font-size:18px;font-weight:700;letter-spacing:.2em;color:#8da0cf;text-transform:uppercase;margin:10px 0 12px}
+  #log{font:500 19px ui-monospace,Consolas,monospace;line-height:1.5;overflow:hidden;height:470px}
+  #log div{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .INFO{color:#9fb4e8}.WARN{color:#fbbf24}.ERROR{color:#fb7185}
+  #tip{position:absolute;display:none;padding:12px 18px;border-radius:14px;background:rgba(8,12,28,.95);border:1px solid rgba(120,160,255,.4);font-size:20px;line-height:1.4;pointer-events:none;z-index:5}
+  #hud{position:absolute;left:80px;bottom:46px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.18em;color:rgba(150,170,220,.6);text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="1920" height="1080"></canvas>
+  <div id="title"><b>Agent Monitor</b><span>Orquestração multiagente · tempo real (simulado) · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <div id="side">
+    <div class="kp"><div><small>Agentes ativos</small><b id="k0">0/18</b></div><div><small>Tokens / s</small><b id="k1">0</b></div></div>
+    <div class="kp"><div><small>Latência p95</small><b id="k2">0 ms</b></div><div><small>Taxa de sucesso</small><b id="k3">0%</b></div></div>
+    <canvas id="spk" width="444" height="90"></canvas>
+    <div id="logh">Eventos</div><div id="log"></div>
+  </div>
+  <div id="tip"></div>
+  <div id="hud">Passe o mouse nos nós · dados sintéticos</div>
+</div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), ctx = cv.getContext('2d'), tip = document.getElementById('tip');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), smooth = (a, b, x) => { x = clamp((x - a) / (b - a)); return x * x * (3 - 2 * x); };
+
+// ---- grafo ----
+const N = [
+  ['Orchestrator', 'core', 40], ['Planner', 'agent', 28], ['Researcher A', 'agent', 26], ['Researcher B', 'agent', 26], ['Researcher C', 'agent', 26],
+  ['Coder A', 'agent', 26], ['Coder B', 'agent', 26], ['Reviewer', 'agent', 28], ['Memory', 'tool', 20], ['Web Search', 'tool', 20], ['Browser', 'tool', 20],
+  ['Vector DB', 'tool', 20], ['Python Sandbox', 'tool', 22], ['GitHub', 'tool', 20], ['Summarizer', 'agent', 26], ['Critic', 'agent', 26], ['Router', 'agent', 28], ['Logger', 'tool', 18]
+].map(([name, type, r], i) => ({ i, name, type, r, x: 0, y: 0, vx: 0, vy: 0 }));
+const E = [[0,1],[0,16],[16,2],[16,3],[16,4],[2,9],[3,10],[4,11],[1,5],[1,6],[5,12],[6,13],[5,7],[6,7],[7,15],[15,0],[14,0],[2,14],[3,14],[8,0],[8,1],[17,0],[17,7]]
+  .map(([a, b], k) => ({ a: N[a], b: N[b], per: [2, 4, 8, 4][k % 4], ph: (k * 0.77) % 8 }));
+// layout de forças com semente (determinístico)
+(function layout() {
+  let s = 12345; const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  N.forEach(n => { n.x = 640 + (rnd() - .5) * 600; n.y = 540 + (rnd() - .5) * 600; });
+  for (let it = 0; it < 500; it++) {
+    const cool = 1 - it / 500;
+    N.forEach(a => { a.fx = (640 - a.x) * .004; a.fy = (540 - a.y) * .004; });
+    for (const a of N) for (const b of N) if (a !== b) { const dx = a.x - b.x, dy = a.y - b.y, d2 = dx * dx + dy * dy + 50, f = 14000 / d2; a.fx += dx / Math.sqrt(d2) * f; a.fy += dy / Math.sqrt(d2) * f; }
+    for (const e of E) { const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y, d = Math.hypot(dx, dy) + .01, f = (d - 190) * .05; e.a.fx += dx / d * f; e.a.fy += dy / d * f; e.b.fx -= dx / d * f; e.b.fy -= dy / d * f; }
+    N.forEach(n => { n.x += n.fx * 6 * cool; n.y += n.fy * 6 * cool; });
+  }
+  const xs = N.map(n => n.x), ys = N.map(n => n.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  N.forEach(n => { n.x = 110 + (n.x - x0) / (x1 - x0) * 1060; n.y = 190 + (n.y - y0) / (y1 - y0) * 740; n.bx = n.x; n.by = n.y; });
+})();
+
+const LOG = [[.3,'INFO','orchestrator','task #4821 recebida'],[.8,'INFO','planner','decomposto em 4 subtarefas'],[1.3,'INFO','router','dispatch → researcher-a/b/c'],[1.9,'INFO','researcher-a','web_search("agent evals") ✓'],
+  [2.4,'INFO','researcher-b','browser.open(docs) ✓'],[3.0,'WARN','researcher-c','vector_db timeout 1.8s · retry 1/3'],[3.6,'INFO','coder-a','sandbox.run(tests) 42/42 ✓'],[4.2,'INFO','summarizer','3 fontes consolidadas'],
+  [4.8,'INFO','coder-b','github.pr.create → pendente'],[5.1,'ERROR','coder-b','sandbox OOM (512 MB)'],[5.6,'INFO','coder-b','retry com 1 GB ✓'],[6.1,'INFO','reviewer','2 comentários · 0 bloqueios'],
+  [6.6,'INFO','critic','score 0.94'],[7.0,'INFO','orchestrator','tarefa concluída em 6.7 s']];
+function status(n, t) {
+  if (n.name === 'Researcher C' && t >= 3.0 && t < 4.6) return 'warn';
+  if (n.name === 'Coder B' && t >= 5.0 && t < 5.7) return 'err';
+  return n.type === 'tool' ? 'idle' : 'run';
+}
+const COL = { run: '#34d399', idle: '#60a5fa', warn: '#fbbf24', err: '#fb7185' };
+let hover = null;
+const toStage = e => { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+cv.addEventListener('pointermove', e => {
+  const [x, y] = toStage(e); hover = null;
+  for (const n of N) if (Math.hypot(n.x - x, n.y - y) < n.r + 10) hover = n;
+  if (hover) { tip.style.display = 'block'; tip.innerHTML = `<b>${hover.name}</b><br><span style="color:#8da0cf">${hover.type === 'tool' ? 'Ferramenta' : hover.type === 'core' ? 'Orquestrador' : 'Agente'}</span><br>${E.filter(e => e.a === hover || e.b === hover).length} conexões`;
+    tip.style.left = (hover.x + hover.r + 16) + 'px'; tip.style.top = (hover.y - 30) + 'px'; } else tip.style.display = 'none';
+});
+cv.addEventListener('pointerleave', () => { hover = null; tip.style.display = 'none'; });
+
+const $ = id => document.getElementById(id), spk = $('spk').getContext('2d');
+const lat = t => 120 + 38 * Math.sin(TAU * t / D * 2) + 22 * Math.sin(TAU * t / D * 5) + (t > 5 && t < 6 ? 170 * Math.sin(Math.PI * (t - 5)) : 0) + (t > 3 && t < 4.6 ? 70 * Math.sin(Math.PI * (t - 3) / 1.6) : 0);
+function render(t) {
+  const ph = TAU * t / D;
+  N.forEach(n => { n.x = n.bx + Math.sin(ph * 2 + n.i * 1.3) * 7; n.y = n.by + Math.cos(ph * 3 + n.i * .9) * 7; });
+  ctx.clearRect(0, 0, W, H);
+  const fin = smooth(0, 1.0, t) * (1 - smooth(7.3, 7.95, t));
+  ctx.globalAlpha = fin;
+  // arestas
+  for (const e of E) {
+    const hi = hover && (e.a === hover || e.b === hover);
+    ctx.strokeStyle = hi ? 'rgba(160,200,255,.7)' : 'rgba(110,150,230,.22)'; ctx.lineWidth = hi ? 3 : 1.6;
+    ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+    // pacotes
+    const prog = ((t + e.ph) / (e.per / 2)) % 1;       // 2 pacotes por período
+    for (const off of [0, .5]) {
+      const q = (prog + off) % 1, x = e.a.x + (e.b.x - e.a.x) * q, y = e.a.y + (e.b.y - e.a.y) * q;
+      ctx.save(); ctx.fillStyle = '#9fe8ff'; ctx.shadowColor = '#5cd2ff'; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, TAU); ctx.fill(); ctx.restore();
+    }
+  }
+  // nós
+  for (const n of N) {
+    const st = status(n, t), c = COL[st], pulse = .5 + .5 * Math.sin(ph * 4 + n.i), r = n.r;
+    let act = 0; for (const e of E) if (e.b === n) { const prog = ((t + e.ph) / (e.per / 2)) % 1; act = Math.max(act, Math.exp(-7 * (prog % .5))); }
+    ctx.save(); ctx.shadowColor = c; ctx.shadowBlur = 18 + 26 * (st === 'err' ? pulse : act);
+    ctx.fillStyle = '#0b1226'; ctx.strokeStyle = c; ctx.lineWidth = n === hover ? 6 : 4;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = c; ctx.globalAlpha = fin * (n.type === 'tool' ? .5 : .9);
+    ctx.beginPath(); ctx.arc(n.x, n.y, r * (.34 + .1 * pulse * (st === 'run' ? 1 : 0)), 0, TAU); ctx.fill(); ctx.globalAlpha = fin;
+    if (st === 'warn' || st === 'err') { ctx.strokeStyle = c; ctx.lineWidth = 3; ctx.globalAlpha = fin * (1 - (pulse)); ctx.beginPath(); ctx.arc(n.x, n.y, r + 10 + pulse * 22, 0, TAU); ctx.stroke(); ctx.globalAlpha = fin; }
+    ctx.fillStyle = '#dbe5ff'; ctx.font = (n.type === 'core' ? '700 22px' : '600 18px') + ' Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(n.name, n.x, n.y + r + 26);
+  }
+  ctx.globalAlpha = 1;
+  // painel
+  const visible = LOG.filter(l => l[0] <= t).slice(-9).reverse();
+  $('log').innerHTML = visible.map(l => `<div class="${l[1]}">${l[0].toFixed(1).padStart(4, ' ')}s  ${l[1].padEnd(5, ' ')} ${l[2]}: ${l[3]}</div>`).join('');
+  const act = N.filter(n => status(n, t) !== 'err').length;
+  $('k0').textContent = (fin > .05 ? act : 0) + '/18';
+  $('k1').textContent = Math.round(fin * (1400 + 380 * Math.sin(ph * 3) + 200 * Math.sin(ph * 7))).toLocaleString('en-US');
+  const L = lat(t); $('k2').textContent = Math.round(fin * L) + ' ms';
+  $('k3').textContent = (fin > .05 ? (t > 5 && t < 5.7 ? 97.8 : 99.2) : 0).toFixed(1) + '%';
+  spk.clearRect(0, 0, 444, 90); spk.lineWidth = 3; spk.strokeStyle = '#7dd3fc'; spk.shadowColor = '#38bdf8'; spk.shadowBlur = 10; spk.beginPath();
+  for (let x = 0; x <= 444; x += 4) { const tt = (((t - (444 - x) / 444 * 4) % D) + D) % D, y = 80 - clamp((lat(tt) - 60) / 320) * 70; x ? spk.lineTo(x, y) : spk.moveTo(x, y); }
+  spk.stroke(); spk.shadowBlur = 0;
+  $('tc').textContent = t.toFixed(2) + 's';
+}
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; render(((s % D) + D) % D); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

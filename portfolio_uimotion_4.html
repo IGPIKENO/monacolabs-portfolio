@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio UI Motion · Pricing toggle</title>
+<script src="vendor/gsap/gsap.min.js"></script>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root{--acc:#8b5cf6;--acc2:#4f46e5;--glow:rgba(139,92,246,.45)}
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;font-family:'Inter',system-ui,sans-serif;color:#eef1ff;
+         background:radial-gradient(ellipse at 50% 0%,#141a38 0%,#070a16 60%,#03040a 100%)}
+  .bl{position:absolute;border-radius:50%;filter:blur(140px);opacity:.4;background:var(--acc)}
+  #head{position:absolute;left:0;right:0;top:96px;text-align:center}
+  #head .k{font-size:24px;font-weight:700;letter-spacing:.4em;color:var(--acc)}
+  #head h1{margin:18px 0 0;font-size:88px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+  #head p{margin:18px 0 0;font-size:30px;color:#93a1cb}
+  #tg{position:absolute;left:0;right:0;top:372px;display:flex;justify-content:center;align-items:center;gap:30px;font-size:30px;font-weight:600}
+  #tg .lb{cursor:pointer;color:#7f8fbd}
+  #sw{width:116px;height:62px;border-radius:31px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);position:relative;cursor:pointer}
+  #kn{position:absolute;top:6px;left:6px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 24px var(--glow)}
+  #bdg{position:absolute;padding:10px 20px;border-radius:999px;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.55);color:#6ee7b7;font-size:22px;font-weight:700;white-space:nowrap}
+  .plan{position:absolute;top:462px;width:440px;height:560px;box-sizing:border-box;padding:40px 40px;border-radius:36px;background:linear-gradient(160deg,rgba(28,36,70,.8),rgba(12,17,38,.82));border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 80px rgba(0,0,0,.4);transition:box-shadow .2s}
+  .plan.pro{border-color:var(--acc);box-shadow:0 30px 90px var(--glow)}
+  .plan:hover{box-shadow:0 30px 90px var(--glow)}
+  .plan h2{margin:0;font-size:32px;font-weight:700}
+  .plan .tag{position:absolute;right:30px;top:34px;padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,var(--acc),var(--acc2));font-size:18px;font-weight:700}
+  .plan .pr{display:flex;align-items:baseline;gap:8px;margin-top:22px;height:96px}
+  .plan .pr b{font-size:88px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .plan .pr s{font-size:32px;color:#7f8fbd;position:relative;top:-6px}
+  .plan .pr span{font-size:24px;color:#93a1cb}
+  .plan .bil{font-size:21px;color:#8d9cc8;height:28px;margin-bottom:22px}
+  .plan ul{list-style:none;margin:0;padding:0}
+  .plan li{display:flex;align-items:center;gap:16px;font-size:22px;margin-bottom:13px;color:#d3dcfa}
+  .plan li i{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:17px;color:var(--acc)}
+  .plan .cta{position:absolute;left:40px;right:40px;bottom:36px;height:70px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:700;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);cursor:pointer}
+  .plan.pro .cta{background:linear-gradient(135deg,var(--acc),var(--acc2));border:0;box-shadow:0 10px 36px var(--glow)}
+  #cur{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid #fff;background:rgba(255,255,255,.18);pointer-events:none;z-index:9;box-shadow:0 0 22px rgba(255,255,255,.35)}
+  #rip{position:absolute;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid #fff;pointer-events:none;z-index:8;opacity:0}
+  #hud{position:absolute;left:60px;top:44px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.18em;color:rgba(160,175,225,.6);text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bl" style="width:800px;height:800px;left:560px;top:-460px"></div>
+  <div id="head"><div class="k">PRICING</div><h1>Preço simples e transparente</h1><p>Escolha o plano ideal. Mude de ciclo quando quiser.</p></div>
+  <div id="tg"><span class="lb" id="lm">Mensal</span><div id="sw"><div id="kn"></div></div><span class="lb" id="ly">Anual</span></div>
+  <div id="bdg">Economize 20%</div>
+
+  <div class="plan" style="left:260px"><h2>Starter</h2><div class="pr"><b data-m="15" data-a="12">$15</b><s>$15</s><span>/mês</span></div><div class="bil"></div>
+    <ul><li><i>✓</i>3 projetos</li><li><i>✓</i>5 GB de armazenamento</li><li><i>✓</i>Exportação em 1080p</li><li><i>✓</i>Suporte por e-mail</li></ul><div class="cta">Começar grátis</div></div>
+  <div class="plan pro" style="left:740px;top:440px;height:604px"><span class="tag">Mais popular</span><h2>Pro</h2><div class="pr"><b data-m="39" data-a="31">$39</b><s>$39</s><span>/mês</span></div><div class="bil"></div>
+    <ul><li><i>✓</i>Projetos ilimitados</li><li><i>✓</i>100 GB de armazenamento</li><li><i>✓</i>Exportação em 4K</li><li><i>✓</i>Colaboração em equipe</li><li><i>✓</i>Suporte prioritário</li></ul><div class="cta">Assinar o Pro</div></div>
+  <div class="plan" style="left:1220px"><h2>Scale</h2><div class="pr"><b data-m="99" data-a="79">$99</b><s>$99</s><span>/mês</span></div><div class="bil"></div>
+    <ul><li><i>✓</i>Tudo do Pro</li><li><i>✓</i>1 TB de armazenamento</li><li><i>✓</i>SSO e auditoria</li><li><i>✓</i>Gerente de conta</li></ul><div class="cta">Falar com vendas</div></div>
+
+  <div id="rip"></div><div id="cur"></div>
+  <div id="hud">Clique no seletor · <span id="tc">0.00s</span></div>
+</div>
+
+<script>
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const lerp = (a, b, x) => a + (b - a) * x, clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const MONTHLY = ['#8b5cf6', '#4f46e5'], ANNUAL = ['#10b981', '#0ea5e9'];
+
+const S = { mode: 0, in: 0, badge: 0, out: 1, cx: 1500, cy: 240, click: 0, curv: 1 };
+function paint() {
+  const m = S.mode, c1 = gsap.utils.interpolate(MONTHLY[0], ANNUAL[0], m), c2 = gsap.utils.interpolate(MONTHLY[1], ANNUAL[1], m);
+  stage.style.setProperty('--acc', c1); stage.style.setProperty('--acc2', c2);
+  stage.style.setProperty('--glow', gsap.utils.interpolate('rgba(139,92,246,.45)', 'rgba(16,185,129,.45)', m));
+  $('#kn').style.transform = `translateX(${m * 54}px)`;
+  $('#lm').style.color = m < .5 ? '#fff' : '#7f8fbd'; $('#ly').style.color = m >= .5 ? '#fff' : '#7f8fbd';
+  $$('.plan').forEach((p, i) => {
+    const e = clamp(S.in * 1.6 - i * .22), y = (1 - e * (2 - e)) * 70, pro = p.classList.contains('pro');
+    p.style.opacity = e * S.out; p.style.transform = `translateY(${y}px) scale(${pro ? 1 : 1})`;
+    const b = p.querySelector('b'), s = p.querySelector('s'), bil = p.querySelector('.bil');
+    const mp = +b.dataset.m, ap = +b.dataset.a;
+    b.textContent = '$' + Math.round(lerp(mp, ap, m)); s.style.opacity = m; s.style.textDecoration = 'line-through';
+    bil.textContent = m > .5 ? `cobrado anualmente · $${ap * 12}/ano` : 'cobrado mensalmente';
+  });
+  $('#head').style.opacity = clamp(S.in * 3) * S.out; $('#head').style.transform = `translateY(${(1 - clamp(S.in * 3)) * -30}px)`;
+  $('#tg').style.opacity = clamp(S.in * 3 - .3) * S.out;
+  const bd = $('#bdg'); const bx = 1190, by = 426;
+  bd.style.left = bx + 'px'; bd.style.top = (by - 46) + 'px'; bd.style.opacity = clamp(S.badge * 1.4) * S.out;
+  bd.style.transform = `scale(${lerp(.4, 1, S.badge)}) rotate(${lerp(-8, 0, clamp(S.badge))}deg)`;
+  const cur = $('#cur'); cur.style.transform = `translate(${S.cx}px,${S.cy}px) scale(${1 - .25 * Math.sin(Math.PI * S.click)})`; cur.style.opacity = S.curv * S.out * clamp(S.in * 3);
+  const rip = $('#rip'); rip.style.transform = `translate(${S.cx}px,${S.cy}px) scale(${1 + 2.2 * S.click})`; rip.style.opacity = S.click > 0 && S.click < 1 ? (1 - S.click) * .7 : 0;
+}
+
+const tl = gsap.timeline({ paused: true });
+const click = at => tl.fromTo(S, { click: 0 }, { click: 1, duration: .45, ease: 'none', immediateRender: false }, at);
+tl.to(S, { in: 1, duration: 1.5, ease: 'none' }, .1)
+  .to(S, { cx: 1100, cy: 403, duration: 1.0, ease: 'sine.inOut' }, 1.0);
+click(2.15);
+tl.to(S, { mode: 1, duration: .8, ease: 'power3.inOut' }, 2.2)
+  .to(S, { badge: 1, duration: .6, ease: 'back.out(2)' }, 2.7)
+  .to(S, { cx: 830, cy: 403, duration: .9, ease: 'sine.inOut' }, 4.4);
+click(5.45);
+tl.to(S, { mode: 0, duration: .8, ease: 'power3.inOut' }, 5.5)
+  .to(S, { badge: 0, duration: .4, ease: 'power2.in' }, 5.5)
+  .to(S, { cx: 1500, cy: 240, duration: .9, ease: 'sine.inOut' }, 6.4)
+  .to(S, { out: 0, duration: .6, ease: 'power2.in' }, 7.3)
+  .to({}, { duration: .001 }, D - .001);
+
+// modo usuário
+let user = false;
+function takeOver() { if (user) return; user = true; tl.pause(); S.in = 1; S.out = 1; S.curv = 0; }
+const setMode = v => { takeOver(); gsap.to(S, { mode: v, duration: .7, ease: 'power3.inOut' }); gsap.to(S, { badge: v, duration: .55, ease: v ? 'back.out(2)' : 'power2.in' }); };
+stage.addEventListener('pointermove', () => takeOver());
+$('#lm').onclick = () => setMode(0); $('#ly').onclick = () => setMode(1); $('#sw').onclick = () => setMode(S.mode > .5 ? 0 : 1);
+
+function render(t) { tl.time(t); paint(); $('#tc').textContent = t.toFixed(2) + 's'; }
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; user = false; S.curv = 1; render(((s % D) + D) % D); };
+window.resume = () => { manual = false; user = false; S.curv = 1; start = performance.now(); };
+(function loop() { if (user) paint(); else if (!manual) render(((performance.now() - start) / 1000) % D); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

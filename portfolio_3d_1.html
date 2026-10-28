@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio 3D · Hero interativo</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;
+         font-family:'Inter',system-ui,sans-serif;color:#eaf1ff;
+         background:radial-gradient(ellipse at 70% 45%,#0b1a3a 0%,#04060f 60%,#02030a 100%)}
+  #stage canvas{position:absolute;inset:0;width:1920px;height:1080px}
+  #copy{position:absolute;left:150px;top:300px;width:820px;pointer-events:none}
+  #kick{font-size:24px;font-weight:600;letter-spacing:.34em;color:#7dd3fc;text-transform:uppercase}
+  #h1{font-size:118px;line-height:1.0;font-weight:800;letter-spacing:-.03em;margin:26px 0 30px}
+  #h1 span{background:linear-gradient(90deg,#7dd3fc,#c4b5fd 60%,#f0abfc);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #sub{font-size:30px;line-height:1.5;color:#9fb0d6;max-width:660px}
+  #cta{display:inline-flex;align-items:center;gap:14px;margin-top:46px;padding:20px 34px;border-radius:999px;font-size:26px;font-weight:600;
+       background:linear-gradient(135deg,#4f7bff,#a259ff);box-shadow:0 0 50px rgba(110,110,255,.45)}
+  #hud{position:absolute;left:150px;bottom:60px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.2em;color:rgba(125,211,252,.6);text-transform:uppercase}
+  #vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.6) 100%)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="copy">
+    <div id="kick">Creative Developer · WebGL</div>
+    <div id="h1">Interfaces<br>that feel <span>alive.</span></div>
+    <div id="sub">Heróis 3D em tempo real, shaders sob medida e física que responde ao cursor.</div>
+    <div id="cta">Start a project <b>→</b></div>
+  </div>
+  <div id="vig"></div>
+  <div id="hud">Mova o mouse · <span id="tc">0.00s</span></div>
+</div>
+
+<script type="module">
+import * as THREE from './vendor/three/build/three.module.js';
+import CSM from './vendor/csm/three-custom-shader-material.es.js';
+import { RoomEnvironment } from './vendor/three/examples/jsm/environments/RoomEnvironment.js';
+
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), tcEl = document.getElementById('tc');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+
+// ponteiro real (3 s de memória); ocioso => cursor virtual periódico (loop perfeito)
+const ptr = { x: 0, y: 0, last: -1e9 };
+stage.addEventListener('pointermove', e => {
+  const r = stage.getBoundingClientRect();
+  ptr.x = (e.clientX - r.left) / r.width * W; ptr.y = (e.clientY - r.top) / r.height * H; ptr.last = performance.now();
+});
+function cursorAt(t, live) {
+  if (live && performance.now() - ptr.last < 3000) return [ptr.x, ptr.y];
+  return [W * .62 + Math.sin(TAU * t / D) * 560, H * .5 + Math.sin(TAU * 2 * t / D + 1) * 280];
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pm = new THREE.PMREMGenerator(renderer);
+scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
+camera.position.set(0, 0, 9);
+const key = new THREE.DirectionalLight(0x9fd8ff, 2.2); key.position.set(4, 5, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0xff7ad9, 2.4); rim.position.set(-5, -2, -4); scene.add(rim);
+
+// ---- Blob líquido (displacement + normais recalculadas no shader) ----
+const CENTER = new THREE.Vector3(2.3, 0, 0);
+const blobMat = new CSM({
+  baseMaterial: THREE.MeshPhysicalMaterial,
+  metalness: 1, roughness: 0.14, clearcoat: 1, clearcoatRoughness: 0.08, iridescence: 0.6, color: 0xffffff,
+  uniforms: { uPhase: { value: 0 }, uCur: { value: new THREE.Vector3(0, 0, 1) }, uStr: { value: 0 } },
+  vertexShader: /* glsl */`
+    uniform float uPhase, uStr; uniform vec3 uCur; varying float vN;
+    float disp(vec3 d){
+      return .22*sin(d.x*3.+uPhase*2.)*sin(d.y*2.+uPhase*3.) + .12*sin(d.z*5.-uPhase*4.+d.x*2.) + .07*sin((d.x+d.y+d.z)*7.+uPhase)
+           + .34*uStr*exp(-7.*(1.-dot(d,uCur)));
+    }
+    vec3 shape(vec3 d){ return d*(1.55+disp(d)); }
+    void main(){
+      vec3 d = normalize(position);
+      vec3 t = normalize(cross(d, vec3(0.,1.,.001))); vec3 b = cross(d, t);
+      vec3 p0 = shape(d), p1 = shape(normalize(d+t*.01)), p2 = shape(normalize(d+b*.01));
+      csm_Position = p0; csm_Normal = normalize(cross(p1-p0, p2-p0));
+      vN = .5+.5*disp(d)*2.2;
+    }`,
+  fragmentShader: /* glsl */`
+    varying float vN;
+    void main(){ csm_DiffuseColor = vec4(mix(vec3(.25,.55,1.), vec3(.95,.45,1.), clamp(vN,0.,1.)), 1.); }`
+});
+const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 64), blobMat);
+blob.position.copy(CENTER); scene.add(blob);
+
+// ---- Estilhaços com mola + repulsão do cursor ----
+const NS = 170;
+const shardGeo = new THREE.OctahedronGeometry(0.075, 0);
+const shardMat = new THREE.MeshPhysicalMaterial({ color: 0xcfe6ff, metalness: 1, roughness: 0.2, clearcoat: 1 });
+const shards = new THREE.InstancedMesh(shardGeo, shardMat, NS); scene.add(shards);
+const S = Array.from({ length: NS }, (_, i) => {
+  const u = (i + .5) / NS, ph = i * 2.399963, r = 2.4 + (i * 7919 % 100) / 100 * 1.7;
+  return { r, ph, el: Math.asin(2 * u - 1), k: (i % 2 ? 1 : -1), px: 0, py: 0, pz: 0, vx: 0, vy: 0, vz: 0, sc: .6 + (i * 31 % 100) / 100 * 1.0 };
+});
+function home(s, t, out) {
+  const a = s.ph + s.k * TAU * t / D;
+  out.x = CENTER.x + s.r * Math.cos(s.el) * Math.cos(a) * .85;
+  out.y = CENTER.y + s.r * Math.sin(s.el) * .9;
+  out.z = s.r * Math.cos(s.el) * Math.sin(a) * .5;
+}
+const hh = { x: 0, y: 0, z: 0 };
+function resetShards(t0) { for (const s of S) { home(s, t0, hh); s.px = hh.x; s.py = hh.y; s.pz = hh.z; s.vx = s.vy = s.vz = 0; } }
+function cursorWorld(t, live) {
+  const [cx, cy] = cursorAt(t, live);
+  return [(cx / W - .5) * 2 * 6.63, -(cy / H - .5) * 2 * 3.73];
+}
+function step(t, live, dt) {
+  const [wx, wy] = cursorWorld(t, live);
+  for (const s of S) {
+    home(s, t, hh);
+    let ax = (hh.x - s.px) * 22, ay = (hh.y - s.py) * 22, az = (hh.z - s.pz) * 22;
+    const dx = s.px - wx, dy = s.py - wy, dz = s.pz - 1.2, d2 = dx * dx + dy * dy + dz * dz + .08;
+    const f = 14 / d2;
+    ax += dx * f; ay += dy * f; az += dz * f;
+    s.vx = (s.vx + ax * dt) * .92; s.vy = (s.vy + ay * dt) * .92; s.vz = (s.vz + az * dt) * .92;
+    s.px += s.vx * dt; s.py += s.vy * dt; s.pz += s.vz * dt;
+  }
+}
+const dummy = new THREE.Object3D(), tmp = new THREE.Color();
+function writeShards(t) {
+  for (let i = 0; i < NS; i++) {
+    const s = S[i];
+    dummy.position.set(s.px, s.py, s.pz);
+    dummy.rotation.set(s.ph + t * TAU / D * 2, s.ph * 2 + t * TAU / D * 3, 0);
+    const sp = Math.min(1.6, Math.hypot(s.vx, s.vy, s.vz) * .5);
+    dummy.scale.setScalar(s.sc * (1 + sp));
+    dummy.updateMatrix(); shards.setMatrixAt(i, dummy.matrix);
+    tmp.setHSL(.55 + sp * .2 + (i % 5) * .03, .8, .65 + sp * .2); shards.setColorAt(i, tmp);
+  }
+  shards.instanceMatrix.needsUpdate = true; shards.instanceColor.needsUpdate = true;
+}
+
+let simT = null;
+function render(t, live) {
+  const dt = 1 / 60;
+  if (live && simT !== null) { step(t, true, dt); }
+  else {  // seek determinístico: aquece 2 loops e simula até t
+    const WARM = 2 * D; resetShards(-WARM);
+    for (let q = -WARM; q < t; q += dt) step(q, false, dt);
+  }
+  simT = live ? t : null;
+
+  const ph = TAU * t / D;
+  const [cx, cy] = cursorAt(t, live);
+  blobMat.uniforms.uPhase.value = ph;
+  const dir = new THREE.Vector3((cx / W - .5) * 2 - 0.0, -(cy / H - .5) * 2, 1.2).normalize();
+  blobMat.uniforms.uCur.value.copy(dir);
+  const near = Math.hypot(cx - W * .62, cy - H * .5) / 700;
+  blobMat.uniforms.uStr.value = Math.max(0, 1 - near);
+  blob.rotation.y = ph; blob.rotation.x = Math.sin(ph) * .25;
+  camera.position.x = Math.sin(ph) * .35; camera.position.y = Math.cos(ph) * .2; camera.lookAt(1.2, 0, 0);
+
+  writeShards(t);
+  renderer.render(scene, camera);
+  tcEl.textContent = t.toFixed(2) + 's';
+}
+
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; render(((s % D) + D) % D, false); };
+window.resume = () => { manual = false; simT = null; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
+window.__ready = true;
+</script>
+</body>
+</html>

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Creative Developer & Audio Engineer · Portfolio</title>
+<meta name="description" content="WebGL, audio engineering, UI motion and data-viz. 16 interactive demos you can run live.">
+<meta name="theme-color" content="#05060d">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2305060d'/%3E%3Cpath d='M18 44 32 14l14 30' fill='none' stroke='%237c5cff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='44' r='5' fill='%2322d3ee'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Creative Developer & Audio Engineer · Portfolio">
+<meta property="og:description" content="WebGL, audio engineering, UI motion and data-viz. 16 interactive demos you can run live.">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://monacolabs.netlify.app/exports/posters/01.jpg">
+<meta property="og:url" content="https://monacolabs.netlify.app/">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root{--bg:#05060d;--bg2:#0a0d1c;--card:#0d1226;--line:rgba(255,255,255,.09);--tx:#eaf0ff;--mut:#8f9cc4;--acc:#7c5cff;--acc2:#22d3ee;--ok:#34d399;--bad:#fb7185;--r:22px}
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:'Inter',system-ui,sans-serif;line-height:1.55;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  h1,h2,h3{font-family:'Space Grotesk','Inter',sans-serif;margin:0;letter-spacing:-.02em}
+  :focus-visible{outline:2px solid var(--acc2);outline-offset:3px;border-radius:8px}
+  #bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 28px}
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;background:rgba(5,6,13,.62);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:68px}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;letter-spacing:.02em}
+  .logo i{font-style:normal;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .links{display:flex;gap:30px;align-items:center;font-size:15px;color:var(--mut)}
+  .links a:hover{color:#fff}
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:999px;font:600 16px 'Inter',sans-serif;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;transition:transform .2s,box-shadow .2s,background .2s}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.pri{border:0;background:linear-gradient(135deg,var(--acc),#4f7bff);box-shadow:0 10px 34px rgba(110,90,255,.45)}
+  .btn.pri:hover{box-shadow:0 14px 44px rgba(110,90,255,.65)}
+  #burger{display:none;background:none;border:1px solid var(--line);color:#fff;border-radius:12px;padding:10px 14px;font-size:18px;cursor:pointer}
+  /* hero */
+  .hero{min-height:calc(100vh - 68px);display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center;padding-top:60px;padding-bottom:80px}
+  .kick{display:inline-flex;gap:10px;align-items:center;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);font-size:14px;color:var(--acc2);font-weight:500}
+  .kick b{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok)}
+  .hero h1{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(42px,6.2vw,92px);line-height:1;margin:24px 0 22px}
+  .hero h1 span{background:linear-gradient(90deg,var(--acc2),var(--acc) 60%,#f0abfc);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{font-size:clamp(17px,1.5vw,21px);color:var(--mut);max-width:560px;margin:0 0 34px}
+  .cta{display:flex;gap:14px;flex-wrap:wrap}
+  .stats{display:flex;gap:38px;margin-top:46px;flex-wrap:wrap}
+  .stats b{display:block;font:700 34px 'Space Grotesk',sans-serif}.stats span{font-size:14px;color:var(--mut)}
+  #heroV{position:relative;aspect-ratio:16/10;border-radius:30px;overflow:hidden;border:1px solid var(--line);background:linear-gradient(145deg,#141a3c,#0a0d1f);box-shadow:0 40px 100px rgba(80,70,255,.25);transition:transform .15s ease-out;transform-style:preserve-3d;will-change:transform}
+  #heroV video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #heroV .tag{position:absolute;left:18px;bottom:18px;padding:8px 16px;border-radius:999px;background:rgba(5,6,13,.65);backdrop-filter:blur(8px);border:1px solid var(--line);font-size:14px}
+  /* seções */
+  section{padding:90px 0}
+  .eyebrow{font:600 14px 'Space Grotesk',sans-serif;letter-spacing:.3em;color:var(--acc2);text-transform:uppercase}
+  h2{font-size:clamp(32px,4vw,56px);margin:14px 0 14px}
+  .lead{color:var(--mut);max-width:640px;font-size:18px;margin:0}
+  /* filtros */
+  #tabs{display:flex;gap:10px;flex-wrap:wrap;margin:38px 0 34px}
+  #tabs button{padding:12px 22px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--mut);font:600 15px 'Inter',sans-serif;cursor:pointer;transition:all .2s}
+  #tabs button:hover{color:#fff}
+  #tabs button[aria-selected=true]{background:linear-gradient(135deg,var(--acc),#4f7bff);color:#fff;border-color:transparent;box-shadow:0 8px 28px rgba(110,90,255,.4)}
+  #tabs button small{opacity:.7;margin-left:6px;font-weight:500}
+  /* grid */
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:24px}
+  .card{background:linear-gradient(170deg,rgba(20,26,56,.85),rgba(10,13,30,.9));border:1px solid var(--line);border-radius:var(--r);overflow:hidden;transition:transform .25s,box-shadow .25s,opacity .22s,border-color .25s;display:flex;flex-direction:column}
+  .card:hover{transform:translateY(-6px);border-color:rgba(124,92,255,.55);box-shadow:0 24px 70px rgba(80,70,255,.25)}
+  .card.out{opacity:0;transform:scale(.96)}
+  .card[hidden]{display:none}
+  .thumb{position:relative;aspect-ratio:16/9;background:linear-gradient(145deg,#171d44,#0b0e22);overflow:hidden;cursor:pointer}
+  .thumb video,.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .thumb .play{position:absolute;right:14px;bottom:14px;width:46px;height:46px;border-radius:50%;background:rgba(5,6,13,.65);backdrop-filter:blur(8px);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px;transition:opacity .2s}
+  .card:hover .play{opacity:0}
+  .num{position:absolute;left:14px;top:14px;padding:6px 12px;border-radius:999px;background:rgba(5,6,13,.65);backdrop-filter:blur(8px);font:600 13px 'Space Grotesk',sans-serif;border:1px solid var(--line)}
+  .body{padding:22px 24px 24px;display:flex;flex-direction:column;gap:14px;flex:1}
+  .body h3{font-size:22px}
+  .cat{font-size:13px;color:var(--acc2);font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+  .tags{display:flex;flex-wrap:wrap;gap:8px}
+  .tags span{padding:5px 12px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:13px;color:#c5d0f2}
+  .acts{display:flex;gap:10px;margin-top:auto;padding-top:6px}
+  .acts .btn{padding:11px 20px;font-size:15px}
+  /* ofertas */
+  .cur{display:inline-flex;margin-top:26px;border:1px solid var(--line);border-radius:999px;padding:5px;background:rgba(255,255,255,.04)}
+  .cur button{border:0;background:none;color:var(--mut);padding:9px 22px;border-radius:999px;font:600 15px 'Inter',sans-serif;cursor:pointer}
+  .cur button[aria-pressed=true]{background:linear-gradient(135deg,var(--acc),#4f7bff);color:#fff}
+  .pk{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin:34px 0 46px}
+  .pkg{position:relative;padding:34px 30px;border-radius:var(--r);border:1px solid var(--line);background:linear-gradient(170deg,rgba(20,26,56,.85),rgba(10,13,30,.9))}
+  .pkg.hot{border-color:var(--acc);box-shadow:0 24px 70px rgba(110,90,255,.3)}
+  .pkg .hotb{position:absolute;right:22px;top:-14px;padding:6px 16px;border-radius:999px;background:linear-gradient(135deg,var(--acc),#4f7bff);font-size:13px;font-weight:700}
+  .pkg h3{font-size:24px}.pkg .pr{font:700 46px 'Space Grotesk',sans-serif;margin:16px 0 4px}.pkg .pr small{font-size:15px;color:var(--mut);font-weight:500}
+  .pkg ul{list-style:none;margin:18px 0 26px;padding:0;display:grid;gap:10px;color:#c5d0f2;font-size:15px}
+  .pkg li:before{content:"✓";color:var(--ok);margin-right:10px;font-weight:700}
+  table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:rgba(13,18,38,.7)}
+  th,td{padding:18px 22px;text-align:left;border-bottom:1px solid var(--line);font-size:16px}
+  th{font:600 13px 'Space Grotesk',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);background:rgba(255,255,255,.03)}
+  td.p{font:700 19px 'Space Grotesk',sans-serif;white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  .note{margin-top:16px;font-size:14px;color:var(--mut)}
+  .tw{overflow-x:auto;border-radius:var(--r)}
+  /* contato */
+  .ct{display:grid;grid-template-columns:.8fr 1.2fr;gap:44px;align-items:start}
+  .soc{display:grid;gap:12px;margin-top:30px}
+  .soc a{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-radius:18px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-weight:600;transition:all .2s}
+  .soc a:hover{border-color:var(--acc);transform:translateX(4px)}
+  form{display:grid;gap:18px;padding:34px;border-radius:var(--r);border:1px solid var(--line);background:linear-gradient(170deg,rgba(20,26,56,.85),rgba(10,13,30,.9))}
+  .f2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  label{display:grid;gap:8px;font-size:14px;color:var(--mut);font-weight:500}
+  input,select,textarea{width:100%;padding:15px 18px;border-radius:14px;border:1.5px solid var(--line);background:rgba(255,255,255,.04);color:#fff;font:400 16px 'Inter',sans-serif;transition:border-color .2s,box-shadow .2s}
+  select option{background:#0d1226}
+  textarea{min-height:130px;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:0;border-color:var(--acc);box-shadow:0 0 0 4px rgba(124,92,255,.2)}
+  .fld.err input,.fld.err select,.fld.err textarea{border-color:var(--bad);box-shadow:0 0 0 4px rgba(251,113,133,.15)}
+  .fld.ok input,.fld.ok select,.fld.ok textarea{border-color:rgba(52,211,153,.7)}
+  .msg{font-size:13px;color:var(--bad);min-height:0;display:none}.fld.err .msg{display:block}
+  #okbox{display:none;padding:20px 22px;border-radius:16px;border:1px solid rgba(52,211,153,.55);background:rgba(52,211,153,.1);color:#b7f5da;font-size:15px}
+  footer{position:relative;z-index:1;border-top:1px solid var(--line);padding:34px 0;color:var(--mut);font-size:14px}
+  footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  /* modal */
+  #modal{position:fixed;inset:0;z-index:50;display:none;background:rgba(2,3,8,.88);backdrop-filter:blur(8px)}
+  #modal.on{display:flex;flex-direction:column;animation:fade .2s}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .mh{display:flex;align-items:center;gap:14px;padding:16px 24px;border-bottom:1px solid var(--line)}
+  .mh h3{font-size:19px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mh button,.mh a{padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;font:600 14px 'Inter',sans-serif;cursor:pointer}
+  .mb{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:18px}
+  #mframe{aspect-ratio:16/9;width:min(100%,calc((100vh - 140px) * 16 / 9));border:1px solid var(--line);border-radius:18px;background:#000;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+  /* responsivo */
+  @media (max-width:980px){
+    .hero{grid-template-columns:1fr;min-height:auto;padding-top:40px}
+    .pk{grid-template-columns:1fr}.ct{grid-template-columns:1fr}
+    .links{position:absolute;top:68px;left:0;right:0;flex-direction:column;align-items:stretch;gap:0;background:rgba(5,6,13,.96);border-bottom:1px solid var(--line);display:none}
+    .links.open{display:flex}.links a{padding:18px 28px;border-top:1px solid var(--line)}
+    #burger{display:block}
+  }
+  @media (max-width:640px){
+    .wrap{padding:0 18px}section{padding:64px 0}.f2{grid-template-columns:1fr}#grid{grid-template-columns:1fr}
+    form{padding:22px}th,td{padding:14px 14px;font-size:14px}.stats{gap:24px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<nav><div class="wrap">
+  <a class="logo" href="#top" aria-label="Home">CREATIVE<i>/</i>DEV</a>
+  <button id="burger" aria-label="Open menu" aria-expanded="false">☰</button>
+  <div class="links" id="links">
+    <a href="#work">Work</a><a href="#offers">Services</a><a href="#contact">Contact</a>
+    <a class="btn pri" id="navCta" href="#contact" style="padding:11px 22px;color:#fff">Hire me</a>
+  </div>
+</div></nav>
+
+<main id="top">
+<div class="wrap hero">
+  <div>
+    <span class="kick"><b></b> Available for new projects</span>
+    <h1>Creative Developer<br>&amp; <span>Audio Engineer</span></h1>
+    <p>I build real-time WebGL experiences, audio-reactive interfaces, product UI motion and live data visualizations. Sixteen interactive demos below — every one runs in your browser.</p>
+    <div class="cta">
+      <a class="btn pri" id="heroContra" href="#" target="_blank" rel="noopener">Hire me on Contra →</a>
+      <a class="btn" href="#work">View the work</a>
+    </div>
+    <div class="stats"><div><b>16</b><span>live demos</span></div><div><b>60 fps</b><span>target on desktop</span></div><div><b>USD · EUR</b><span>invoicing</span></div></div>
+  </div>
+  <div id="heroV" aria-label="Preview of a 3D hero project">
+    <video id="heroVid" muted loop playsinline autoplay preload="metadata" poster="exports/posters/01.jpg"><source src="exports/previews/01.mp4" type="video/mp4"></video>
+    <span class="tag">Creative 3D Hero · Three.js + GLSL</span>
+  </div>
+</div>
+
+<section id="work"><div class="wrap">
+  <div class="eyebrow">Selected work</div>
+  <h2>Interactive demos, not screenshots.</h2>
+  <p class="lead">Hover a card to preview the loop. Open <b>Live demo</b> to play with the real HTML build without leaving the page.</p>
+  <div id="tabs" role="tablist" aria-label="Filter projects"></div>
+  <div id="grid"></div>
+</div></section>
+
+<section id="offers"><div class="wrap">
+  <div class="eyebrow">Services &amp; packages</div>
+  <h2>Clear scopes, fixed prices.</h2>
+  <p class="lead">Reference pricing for typical scopes. Final quote after a short brief.</p>
+  <div class="cur" role="group" aria-label="Currency"><button data-cur="usd" aria-pressed="true">USD $</button><button data-cur="eur" aria-pressed="false">EUR €</button></div>
+  <div class="pk" id="pk"></div>
+  <div class="tw"><table><thead><tr><th>Service</th><th>Deliverable</th><th>Timeline</th><th>From</th></tr></thead><tbody id="svc"></tbody></table></div>
+  <p class="note">Includes source files, 1080p/60fps MP4 exports and one revision round. Prices are starting points and may vary with scope.</p>
+</div></section>
+
+<section id="contact"><div class="wrap ct">
+  <div>
+    <div class="eyebrow">Contact</div>
+    <h2>Let's build something that moves.</h2>
+    <p class="lead">Tell me about your project. I usually reply within one business day.</p>
+    <div class="soc">
+      <a id="lnContra" href="#" target="_blank" rel="noopener">Contra <span>↗</span></a>
+      <a id="lnLinkedin" href="#" target="_blank" rel="noopener">LinkedIn <span>↗</span></a>
+      <a id="lnGithub" href="#" target="_blank" rel="noopener">GitHub <span>↗</span></a>
+    </div>
+  </div>
+  <form id="form" novalidate>
+    <div class="f2">
+      <label class="fld">Name<input name="name" autocomplete="name" placeholder="Your name"><span class="msg">Please enter your name (2+ characters).</span></label>
+      <label class="fld">Email<input name="email" type="email" autocomplete="email" placeholder="you@company.com"><span class="msg">Enter a valid email address.</span></label>
+    </div>
+    <div class="f2">
+      <label class="fld">Project type<select name="type"><option value="">Select…</option><option>3D / WebGL hero</option><option>Audio interface / DSP UI</option><option>UI motion</option><option>Data viz / AI dashboard</option><option>Something else</option></select><span class="msg">Choose a project type.</span></label>
+      <label class="fld">Budget<select name="budget"><option value="">Select…</option><option>Under $1,500</option><option>$1,500 – $3,000</option><option>$3,000 – $6,000</option><option>$6,000+</option></select><span class="msg">Choose a budget range.</span></label>
+    </div>
+    <label class="fld">Message<textarea name="message" placeholder="What are you building, and when do you need it?"></textarea><span class="msg">Please write at least 20 characters.</span></label>
+    <button class="btn pri" type="submit" style="justify-content:center">Send message</button>
+    <div id="okbox" role="status"></div>
+  </form>
+</div></section>
+</main>
+
+<footer><div class="wrap"><span>© <span id="yr"></span> Creative Developer &amp; Audio Engineer</span><span>Built with WebGL, Web Audio and GSAP</span></div></footer>
+
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+  <div class="mh"><h3 id="mtitle"></h3><button id="mprev" aria-label="Previous demo">←</button><button id="mnext" aria-label="Next demo">→</button><a id="mopen" target="_blank" rel="noopener">Open in new tab ↗</a><button id="mclose" aria-label="Close">✕ Close</button></div>
+  <div class="mb"><iframe id="mframe" title="Live demo" allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin allow-pointer-lock" referrerpolicy="no-referrer"></iframe></div>
+</div>
+
+<script>
+/* ===== CONFIGURAÇÃO — troque pelos seus dados reais =====
+   Os links abaixo são páginas iniciais genéricas até você colocar seus perfis. */
+const CONFIG = {
+  contra:   'https://contra.com/',            // ex.: https://contra.com/seu_usuario
+  linkedin: 'https://www.linkedin.com/',      // ex.: https://www.linkedin.com/in/seu-perfil
+  github:   'https://github.com/IGPIKENO',      // perfil do GitHub
+  email:    'monacolabss@gmail.com'           // e-mail de contato (aparece no código da página); vazio = o formulário só copia o rascunho
+};
+
+const CATS = [['all', 'All'], ['3d', '3D & WebGL'], ['audio', 'Audio Engineering & DSP'], ['ui', 'UI Motion & Micro-interactions'], ['data', 'Data Viz & AI Systems']];
+const CAT_NAME = Object.fromEntries(CATS);
+const P = [
+  ['3d', 'Creative 3D Hero', ['Three.js', 'GLSL', 'Mouse physics'], 'portfolio_3d_1.html', '01_creative_3d_hero'],
+  ['3d', 'Liquid Glass Shader', ['GLSL', 'Refraction', 'Chromatic aberration'], 'portfolio_3d_2.html', '02_glassmorphism_shader'],
+  ['3d', 'Neon Particle Field', ['14k particles', 'Gravity', 'WebGL'], 'portfolio_3d_3.html', '03_neon_particle_field'],
+  ['3d', '3D Product Showcase', ['Blender', 'glTF', 'PBR lighting'], 'portfolio_3d_4.html', '04_product_showcase_3d'],
+  ['audio', '3D Spectrum Analyzer', ['Web Audio', 'FFT', 'Three.js'], 'portfolio_audio_1.html', '05_audio_spectrum_3d'],
+  ['audio', 'Parametric EQ UI', ['DSP', 'Biquad filters', 'Canvas'], 'portfolio_audio_2.html', '06_parametric_eq_ui'],
+  ['audio', 'Beat Machine', ['Web Audio', 'Synth', 'Sequencer'], 'portfolio_audio_3.html', '07_drum_machine_sequencer'],
+  ['audio', 'VU & Peak Meters', ['Needle ballistics', 'LED glow', 'Canvas'], 'portfolio_audio_4.html', '08_vu_meters_glow'],
+  ['ui', 'Fintech Dashboard Motion', ['GSAP', 'SVG', 'Animated counters'], 'portfolio_uimotion_1.html', '09_fintech_dashboard_motion'],
+  ['ui', '3D Parallax Product Card', ['GSAP', 'FLIP expand', '3D tilt'], 'portfolio_uimotion_2.html', '10_ecommerce_card_parallax'],
+  ['ui', 'Spring-physics Dock', ['Springs', 'Magnification', 'SVG icons'], 'portfolio_uimotion_3.html', '11_spring_dock_physics'],
+  ['ui', 'Pricing Toggle', ['Theme swap', 'Micro-interactions', 'GSAP'], 'portfolio_uimotion_4.html', '12_pricing_toggle_theme'],
+  ['data', 'AI Agents Monitor', ['Graph', 'Canvas', 'Realtime UI'], 'portfolio_dataviz_1.html', '13_ai_agents_monitor'],
+  ['data', 'Candlestick & Order Execution', ['Canvas', 'Trading UI', 'Simulated data'], 'portfolio_dataviz_2.html', '14_candlestick_order_execution'],
+  ['data', 'Workflow Automation Canvas', ['SVG', 'Drag & drop', 'n8n-style'], 'portfolio_dataviz_3.html', '15_workflow_automation_pipeline'],
+  ['data', 'Media Performance Report', ['Data viz', 'GSAP', 'Tooltips'], 'portfolio_dataviz_4.html', '16_media_performance_report']
+].map(([cat, title, tags, file, out], i) => ({ cat, title, tags, file, out, n: String(i + 1).padStart(2, '0') }));
+
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+$('#yr').textContent = new Date().getFullYear();
+$('#heroContra').href = $('#lnContra').href = CONFIG.contra; $('#lnLinkedin').href = CONFIG.linkedin; $('#lnGithub').href = CONFIG.github;
+
+/* ---------- navegação mobile ---------- */
+$('#burger').onclick = () => { const o = $('#links').classList.toggle('open'); $('#burger').setAttribute('aria-expanded', o); };
+$$('#links a').forEach(a => a.addEventListener('click', () => { $('#links').classList.remove('open'); $('#burger').setAttribute('aria-expanded', false); }));
+
+/* ---------- grade de projetos ---------- */
+const grid = $('#grid'), tabs = $('#tabs');
+CATS.forEach(([k, name], i) => {
+  const b = document.createElement('button'); b.role = 'tab'; b.dataset.f = k; b.setAttribute('aria-selected', i === 0);
+  const count = k === 'all' ? P.length : P.filter(p => p.cat === k).length; b.innerHTML = `${name}<small>${count}</small>`; tabs.appendChild(b);
+});
+P.forEach(p => {
+  const c = document.createElement('article'); c.className = 'card'; c.dataset.cat = p.cat;
+  c.innerHTML = `<div class="thumb" tabindex="0" role="button" aria-label="Preview ${p.title}">
+      <video muted loop playsinline preload="none" data-src="exports/previews/${p.n}.mp4" poster="exports/posters/${p.n}.jpg"></video>
+      <span class="num">${p.n}</span><span class="play" aria-hidden="true">▶</span></div>
+    <div class="body"><div class="cat">${CAT_NAME[p.cat]}</div><h3>${p.title}</h3>
+      <div class="tags">${p.tags.map(t => `<span>${t}</span>`).join('')}</div>
+      <div class="acts"><button class="btn pri" data-demo="${p.n}">Live demo</button><a class="btn" href="exports/${p.out}.mp4" download>MP4 ↓</a></div></div>`;
+  grid.appendChild(c); p.el = c;
+});
+// vídeos: carrega só perto da tela; toca no hover/foco (em telas de toque, quando visível)
+const touch = matchMedia('(hover: none)').matches, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const io = new IntersectionObserver(es => es.forEach(e => {
+  const v = e.target.querySelector('video');
+  if (e.isIntersecting) { if (!v.src && v.dataset.src) { v.preload = 'metadata'; v.src = v.dataset.src; } if (touch && !reduce && e.intersectionRatio > .6) v.play().catch(() => {}); }
+  else if (touch) v.pause();
+}), { rootMargin: '200px', threshold: [0, .6] });
+P.forEach(p => {
+  const t = $('.thumb', p.el), v = $('video', p.el); io.observe(p.el);
+  let hov = false;
+  const on = () => { hov = true; if (!v.src) { v.preload = 'metadata'; v.src = v.dataset.src; } const go = () => { if (hov) v.play().catch(() => {}); }; v.readyState >= 2 ? go() : v.addEventListener('loadeddata', go, { once: true }); };
+  const off = () => { hov = false; v.pause(); v.currentTime = 0; };
+  t.addEventListener('pointerenter', on); t.addEventListener('pointerleave', off); t.addEventListener('focus', on); t.addEventListener('blur', off);
+  t.addEventListener('click', () => openDemo(p)); t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDemo(p); } });
+  v.addEventListener('error', () => { v.style.display = 'none'; });
+});
+tabs.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  $$('button', tabs).forEach(x => x.setAttribute('aria-selected', x === b));
+  const f = b.dataset.f; let i = 0;
+  P.forEach(p => {
+    const show = f === 'all' || p.cat === f;
+    if (show) { p.el.hidden = false; setTimeout(() => p.el.classList.remove('out'), 20 + (i++) * 40); }
+    else { p.el.classList.add('out'); setTimeout(() => { if (p.el.classList.contains('out')) p.el.hidden = true; }, 230); }
+  });
+});
+
+/* ---------- modal com iframe ---------- */
+const modal = $('#modal'), frame = $('#mframe'); let cur = 0, lastFocus = null;
+function openDemo(p) {
+  cur = P.indexOf(p); lastFocus = document.activeElement;
+  $('#mtitle').textContent = `${p.n} · ${p.title}`; $('#mopen').href = p.file; frame.src = p.file;
+  modal.classList.add('on'); document.body.style.overflow = 'hidden'; $('#mclose').focus();
+}
+function closeDemo() { modal.classList.remove('on'); frame.src = 'about:blank'; document.body.style.overflow = ''; lastFocus && lastFocus.focus(); }
+const step = d => openDemo(P[(cur + d + P.length) % P.length]);
+$('#mclose').onclick = closeDemo; $('#mprev').onclick = () => step(-1); $('#mnext').onclick = () => step(1);
+modal.addEventListener('click', e => { if (e.target === modal || e.target.classList.contains('mb')) closeDemo(); });
+addEventListener('keydown', e => { if (!modal.classList.contains('on')) return; if (e.key === 'Escape') closeDemo(); if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1); });
+grid.addEventListener('click', e => { const b = e.target.closest('[data-demo]'); if (b) openDemo(P[+b.dataset.demo - 1]); });
+
+/* ---------- serviços e pacotes (preços de referência; edite à vontade) ---------- */
+const PK = [
+  ['Launch', 'Single effect or UI piece', { usd: 1400, eur: 1290 }, ['1 interactive HTML demo', '1080p / 60fps MP4 loop', 'Source files', '1 revision round'], 0],
+  ['Studio', '3D hero section', { usd: 2450, eur: 2250 }, ['Custom 3D hero (Three.js / GLSL)', 'Mouse interaction & physics', 'Performance pass to 60fps', 'MP4 exports for social', '2 revision rounds'], 1],
+  ['Partner', 'Hero + audio UI + dashboard', { usd: 4900, eur: 4500 }, ['3D hero section', 'Interactive audio / DSP UI', 'Animated data dashboard', 'Launch video exports', 'Priority support'], 0]
+];
+const SV = [
+  ['3D Hero Section', 'Interactive WebGL hero, ready to embed', '1–2 weeks', { usd: 2450, eur: 2250 }],
+  ['Interactive Audio / VST-style UI', 'EQ, meters, sequencer or visualizer in HTML/Canvas', '1–2 weeks', { usd: 1800, eur: 1650 }],
+  ['UI Motion Kit', '4 animated product screens + micro-interactions', '1 week', { usd: 1400, eur: 1290 }],
+  ['Animated Data Dashboard', 'Live-looking charts, graphs and counters', '1–2 weeks', { usd: 2100, eur: 1930 }],
+  ['Shader / WebGL Effect', 'Single custom effect (glass, particles, post-FX)', '3–5 days', { usd: 750, eur: 690 }],
+  ['8-second Loop Video Set', 'MP4 renders of your motion pieces, 1080p/60fps', '2–3 days', { usd: 450, eur: 410 }]
+];
+let currency = 'usd'; const sym = { usd: '$', eur: '€' }, fmt = (n, c) => (c === 'usd' ? '$' + n.toLocaleString('en-US') : n.toLocaleString('de-DE') + ' €');
+function renderOffers() {
+  $('#pk').innerHTML = PK.map(([n, sub, pr, items, hot]) => `<div class="pkg ${hot ? 'hot' : ''}">${hot ? '<span class="hotb">Most popular</span>' : ''}<h3>${n}</h3><div style="color:var(--mut)">${sub}</div><div class="pr">${fmt(pr[currency], currency)}<small> / project</small></div><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul><a class="btn ${hot ? 'pri' : ''}" href="#contact" style="width:100%;justify-content:center">Request this package</a></div>`).join('');
+  $('#svc').innerHTML = SV.map(([a, b, c, d]) => `<tr><td><b>${a}</b></td><td style="color:var(--mut)">${b}</td><td>${c}</td><td class="p">${fmt(d[currency], currency)}</td></tr>`).join('');
+}
+$$('.cur button').forEach(b => b.onclick = () => { currency = b.dataset.cur; $$('.cur button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderOffers(); });
+renderOffers();
+
+/* ---------- formulário com validação visual ---------- */
+const form = $('#form'), rules = {
+  name: v => v.trim().length >= 2, email: v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()),
+  type: v => !!v, budget: v => !!v, message: v => v.trim().length >= 20
+};
+const check = el => { const ok = rules[el.name](el.value), f = el.closest('.fld'); f.classList.toggle('err', !ok); f.classList.toggle('ok', ok); return ok; };
+$$('input,select,textarea', form).forEach(el => { el.addEventListener('blur', () => check(el)); el.addEventListener('input', () => { if (el.closest('.fld').classList.contains('err')) check(el); }); });
+form.addEventListener('submit', async e => {
+  e.preventDefault(); const els = $$('input,select,textarea', form), ok = els.map(check).every(Boolean), box = $('#okbox');
+  if (!ok) { box.style.display = 'none'; (els.find(el => el.closest('.fld').classList.contains('err')) || {}).focus?.(); return; }
+  const d = Object.fromEntries(new FormData(form)), text = `Project: ${d.type}\nBudget: ${d.budget}\nFrom: ${d.name} <${d.email}>\n\n${d.message}`;
+  box.style.display = 'block';
+  if (CONFIG.email) { location.href = `mailto:${CONFIG.email}?subject=${encodeURIComponent('Project inquiry — ' + d.type)}&body=${encodeURIComponent(text)}`; box.textContent = '✓ Your email app should open with the message ready to send.'; }
+  else { try { await navigator.clipboard.writeText(text); } catch (_) {} box.textContent = '✓ Message validated and copied. (Set CONFIG.email in index.html to send it by email.)'; }
+  form.reset(); $$('.fld', form).forEach(f => f.classList.remove('ok', 'err'));
+});
+
+/* ---------- fundo: partículas com profundidade que reagem ao cursor ---------- */
+(() => {
+  const cv = $('#bg'), ctx = cv.getContext('2d'); let W, H, dpr, pts = [], mx = -999, my = -999, tick = 0, run = true;
+  function size() { dpr = Math.min(devicePixelRatio || 1, 1.5); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = Math.round(Math.min(1100, W * H / 1900)); pts = Array.from({ length: n }, () => { const z = .25 + Math.random() * .75; return { hx: Math.random() * W, hy: Math.random() * H, x: 0, y: 0, vx: 0, vy: 0, z, ph: Math.random() * 6.28 }; });
+    pts.forEach(p => { p.x = p.hx; p.y = p.hy; }); }
+  addEventListener('resize', size); size();
+  addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; }, { passive: true }); addEventListener('pointerleave', () => { mx = my = -999; });
+  document.addEventListener('visibilitychange', () => { run = !document.hidden; if (run) loop(); });
+  function frame() {
+    ctx.fillStyle = 'rgba(5,6,13,.22)'; ctx.fillRect(0, 0, W, H);
+    const t = tick++ * .008, R = 190;
+    for (const p of pts) {
+      const ox = Math.sin(t + p.ph) * 14 * p.z, oy = Math.cos(t * .9 + p.ph) * 14 * p.z;
+      let ax = (p.hx + ox - p.x) * .02, ay = (p.hy + oy - p.y) * .02;
+      const dx = p.x - mx, dy = p.y - my, d2 = dx * dx + dy * dy;
+      if (d2 < R * R) { const f = (1 - Math.sqrt(d2) / R) * 3.4 * p.z; const d = Math.sqrt(d2) + .001; ax += dx / d * f; ay += dy / d * f; }
+      p.vx = (p.vx + ax) * .9; p.vy = (p.vy + ay) * .9; p.x += p.vx; p.y += p.vy;
+      const sp = Math.min(1, Math.hypot(p.vx, p.vy) / 3), a = .25 + .5 * p.z;
+      ctx.fillStyle = sp > .15 ? `rgba(${Math.round(120 + 100 * sp)},${Math.round(150 + 60 * sp)},255,${Math.min(1, a + sp * .5)})` : `rgba(130,150,235,${a * .8})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, .7 + p.z * 1.5 + sp * 1.4, 0, 6.2832); ctx.fill();
+    }
+  }
+  window.__bgFrame = frame;
+  function loop() { if (!run) return; frame(); requestAnimationFrame(loop); }
+  if (reduce) { ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, H); frame(); } else loop();
+})();
+
+/* ---------- preview do herói: inclinação 3D com o mouse ---------- */
+(() => {
+  const el = $('#heroV');
+  if (reduce) { const hv0 = $('#heroVid'); hv0.removeAttribute('autoplay'); hv0.pause(); el.addEventListener('pointerenter', () => hv0.play().catch(() => {})); el.addEventListener('pointerleave', () => hv0.pause()); return; }
+  el.addEventListener('pointermove', e => { const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; el.style.transform = `perspective(1100px) rotateY(${x * 12}deg) rotateX(${-y * 10}deg)`; });
+  el.addEventListener('pointerleave', () => { el.style.transform = ''; });
+  const hv = $('#heroVid'); hv.addEventListener('error', () => { hv.style.display = 'none'; });
+})();
+</script>
+</body>
+</html>

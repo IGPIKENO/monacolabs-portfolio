@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Portfolio 3D · Vidro líquido</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;background:#05060f;cursor:none}
+  #stage canvas{position:absolute;inset:0;width:1920px;height:1080px}
+  #hud{position:absolute;left:70px;bottom:50px;font:500 20px ui-monospace,Consolas,monospace;letter-spacing:.22em;color:rgba(255,255,255,.55);text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="stage"><div id="hud">Shader de vidro líquido · refração + aberração cromática · <span id="tc">0.00s</span></div></div>
+
+<script type="module">
+import * as THREE from './vendor/three/build/three.module.js';
+
+const W = 1920, H = 1080, D = 8, TAU = Math.PI * 2;
+const stage = document.getElementById('stage'), tcEl = document.getElementById('tc');
+function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener('resize', fit); fit();
+
+const ptr = { x: 0, y: 0, last: -1e9 };
+stage.addEventListener('pointermove', e => {
+  const r = stage.getBoundingClientRect();
+  ptr.x = (e.clientX - r.left) / r.width * W; ptr.y = (e.clientY - r.top) / r.height * H; ptr.last = performance.now();
+});
+const cursorAt = (t, live) => (live && performance.now() - ptr.last < 3000) ? [ptr.x, ptr.y]
+  : [W / 2 + Math.sin(TAU * t / D) * 640, H / 2 + Math.sin(TAU * 2 * t / D + 1) * 300];
+
+// ---- Textura de fundo (texto grande + formas) desenhada em Canvas 2D ----
+const bgc = document.createElement('canvas'); bgc.width = W; bgc.height = H;
+function drawBg() {
+  const x = bgc.getContext('2d');
+  x.clearRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(255,255,255,.10)'; x.lineWidth = 2;
+  for (let i = 0; i <= W; i += 96) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, H); x.stroke(); }
+  for (let j = 0; j <= H; j += 96) { x.beginPath(); x.moveTo(0, j); x.lineTo(W, j); x.stroke(); }
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '800 380px Inter, system-ui, sans-serif';
+  x.fillStyle = 'rgba(255,255,255,.95)'; x.fillText('LIQUID', W / 2, 390);
+  x.lineWidth = 6; x.strokeStyle = 'rgba(255,255,255,.95)'; x.fillStyle = 'rgba(255,255,255,0)';
+  x.strokeText('GLASS', W / 2, 740);
+  x.font = '500 34px Inter, system-ui, sans-serif'; x.fillStyle = 'rgba(255,255,255,.7)';
+  x.fillText('REAL-TIME REFRACTION · GLSL', W / 2, 960);
+  for (const [cx, cy, r, c] of [[300, 220, 70, '#ffd166'], [1650, 860, 90, '#06d6a0'], [1560, 190, 50, '#ff4d8d']]) {
+    x.fillStyle = c; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
+  }
+}
+drawBg();
+const bgTex = new THREE.CanvasTexture(bgc); bgTex.minFilter = THREE.LinearFilter; bgTex.generateMipmaps = false;
+
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+const mat = new THREE.ShaderMaterial({
+  uniforms: { uBg: { value: bgTex }, uRes: { value: new THREE.Vector2(W, H) }, uPhase: { value: 0 }, uCur: { value: new THREE.Vector2() } },
+  vertexShader: `void main(){ gl_Position = vec4(position.xy, 0., 1.); }`,
+  fragmentShader: /* glsl */`
+    precision highp float;
+    uniform sampler2D uBg; uniform vec2 uRes, uCur; uniform float uPhase;
+    float circle(vec2 p, vec2 c, float r){ return length(p-c)-r; }
+    float smin(float a, float b, float k){ float h = max(k-abs(a-b),0.)/k; return min(a,b) - h*h*k*.25; }
+    float field(vec2 p){
+      float d = circle(p, uCur, 185.);
+      d = smin(d, circle(p, uCur + vec2(cos(uPhase*2.), sin(uPhase*3.))*330., 105.), 140.);
+      d = smin(d, circle(p, uRes*.5 + vec2(sin(uPhase), cos(uPhase*2.))*520., 140.), 140.);
+      d = smin(d, circle(p, uRes*.5 + vec2(cos(uPhase*3.), sin(uPhase))*-420. + vec2(0.,-120.), 90.), 130.);
+      return d;
+    }
+    vec3 base(vec2 px){
+      vec2 uv = px/uRes;
+      // fundo: blobs coloridos periódicos
+      vec3 c = vec3(.03,.04,.10);
+      c += .55*vec3(.20,.35,1.0) * smoothstep(.75, 0., length(uv-vec2(.25+.1*sin(uPhase), .65+.1*cos(uPhase*2.))));
+      c += .55*vec3(1.0,.25,.65) * smoothstep(.70, 0., length(uv-vec2(.78+.08*cos(uPhase*2.), .35+.1*sin(uPhase))));
+      c += .40*vec3(.1,.9,.8)   * smoothstep(.55, 0., length(uv-vec2(.5+.2*sin(uPhase*3.), .9)));
+      vec4 t = texture2D(uBg, uv);
+      return mix(c, t.rgb, t.a);
+    }
+    vec3 tap(vec2 px){ // desfoque leve (vidro fosco)
+      vec3 s = base(px)*.4;
+      s += base(px+vec2( 5., 3.))*.15 + base(px+vec2(-5.,-3.))*.15 + base(px+vec2(-3., 5.))*.15 + base(px+vec2( 3.,-5.))*.15;
+      return s;
+    }
+    void main(){
+      vec2 p = gl_FragCoord.xy;
+      float d = field(p);
+      vec3 col = base(p);
+      float e = 1.5;
+      vec2 g = vec2(field(p+vec2(e,0.))-field(p-vec2(e,0.)), field(p+vec2(0.,e))-field(p-vec2(0.,e)));
+      vec2 n = normalize(g + 1e-5);
+      if (d > 0.) {
+        col *= 1. - .35*exp(-d/38.);                  // sombra projetada
+      } else {
+        float depth = -d;
+        float edge = 1. - clamp(depth/110., 0., 1.);
+        float bend = edge*edge;
+        vec2 off = -n * bend * 120.;                     // refração: lente espessa nas bordas
+        vec2 mag = (p - (p - n*depth)) * 0.0;            // reservado
+        vec3 refr;
+        refr.r = tap(p + off*1.00).r;
+        refr.g = tap(p + off*1.06).g;
+        refr.b = tap(p + off*1.12).b;
+        refr = refr*vec3(.94,.98,1.04) + vec3(.02,.03,.05);
+        float rim = pow(1. - clamp(depth/46., 0., 1.), 3.);
+        vec2 L = normalize(vec2(-.6,.8));
+        float spec = pow(max(dot(n, L), 0.), 6.) * rim * 1.4;
+        float spec2 = pow(max(dot(n, -L), 0.), 10.) * rim * .6;
+        col = refr + vec3(.75,.9,1.)*(rim*.28) + vec3(1.)*spec + vec3(.6,.7,1.)*spec2;
+        col = mix(col, col*vec3(1.05,1.0,1.1), .3);
+      }
+      gl_FragColor = vec4(col, 1.);
+    }`
+});
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+
+function render(t, live) {
+  const [cx, cy] = cursorAt(t, live);
+  mat.uniforms.uCur.value.set(cx, H - cy);
+  mat.uniforms.uPhase.value = TAU * t / D;
+  renderer.render(scene, camera);
+  tcEl.textContent = t.toFixed(2) + 's';
+}
+let manual = false, start = performance.now();
+window.DURATION = D;
+window.seek = s => { manual = true; render(((s % D) + D) % D, false); };
+window.resume = () => { manual = false; start = performance.now(); };
+(function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
+// a fonte Inter chega depois: redesenha a textura quando carregar
+if (document.fonts) Promise.all([document.fonts.load('800 380px Inter'), document.fonts.load('500 34px Inter')])
+  .then(() => { drawBg(); bgTex.needsUpdate = true; }).catch(() => {});
+window.__ready = true;
+</script>
+</body>
+</html>
