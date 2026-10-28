@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio UI Motion · Dashboard fintech</title>
+<title>Portfolio UI Motion · Fintech dashboard</title>
 <script src="vendor/gsap/gsap.min.js"></script>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
@@ -45,17 +45,17 @@
 <div id="stage">
   <div id="side"><i class="logo"></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
   <div id="head">
-    <div><h1>Good evening, Alex</h1><p>Seu patrimônio está 4,2% acima do mês passado</p></div>
-    <div class="r"><div class="pill">Últimos 30 dias ▾</div><div class="av"></div></div>
+    <div><h1>Good evening, Alex</h1><p>Your net worth is 4.2% above last month</p></div>
+    <div class="r"><div class="pill">Last 30 days ▾</div><div class="av"></div></div>
   </div>
 
-  <div class="card" id="c0" style="left:190px"><div class="k">Saldo total</div><span class="d up">+4,2%</span><div class="v" id="v0">$0.00</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#6ee7b7" stroke-width="3" stroke-linecap="round"/></svg></div>
-  <div class="card" style="left:606px"><div class="k">Receita mensal</div><span class="d up">+8,1%</span><div class="v" id="v1">$0</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/></svg></div>
-  <div class="card" style="left:1022px"><div class="k">Despesas</div><span class="d dn">+2,3%</span><div class="v" id="v2">$0</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#fda4af" stroke-width="3" stroke-linecap="round"/></svg></div>
-  <div class="card" style="left:1438px"><div class="k">Taxa de poupança</div><span class="d up">+1,4 pp</span><div class="v" id="v3">0%</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#c4b5fd" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" id="c0" style="left:190px"><div class="k">Total balance</div><span class="d up">+4.2%</span><div class="v" id="v0">$0.00</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#6ee7b7" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" style="left:606px"><div class="k">Monthly income</div><span class="d up">+8.1%</span><div class="v" id="v1">$0</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" style="left:1022px"><div class="k">Expenses</div><span class="d dn">+2.3%</span><div class="v" id="v2">$0</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#fda4af" stroke-width="3" stroke-linecap="round"/></svg></div>
+  <div class="card" style="left:1438px"><div class="k">Savings rate</div><span class="d up">+1.4 pp</span><div class="v" id="v3">0%</div><svg viewBox="0 0 332 48"><path class="sp" fill="none" stroke="#c4b5fd" stroke-width="3" stroke-linecap="round"/></svg></div>
 
   <div class="panel" id="chartp">
-    <h3>Desempenho do portfólio</h3><div class="sub">Passe o mouse sobre o gráfico</div>
+    <h3>Portfolio performance</h3><div class="sub">Hover over the chart</div>
     <svg id="chart" viewBox="0 0 932 230" style="position:absolute;left:34px;top:92px;width:932px;height:230px;overflow:visible">
       <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f7bff" stop-opacity=".45"/><stop offset="1" stop-color="#4f7bff" stop-opacity="0"/></linearGradient>
       <linearGradient id="lg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
@@ -65,11 +65,11 @@
     </svg>
   </div>
   <div class="panel" id="donutp">
-    <h3>Alocação</h3><div class="sub">Distribuição por classe de ativo</div>
+    <h3>Allocation</h3><div class="sub">Distribution by asset class</div>
     <svg viewBox="0 0 200 200" style="position:absolute;left:30px;top:96px;width:210px;height:210px;transform:rotate(-90deg)"><g id="donut"></g></svg>
     <div id="legend" style="position:absolute;left:270px;top:112px;right:34px"></div>
   </div>
-  <div class="panel" id="txp"><h3 style="margin-bottom:8px">Transações recentes</h3><div id="txs"></div></div>
+  <div class="panel" id="txp"><h3 style="margin-bottom:8px">Recent transactions</h3><div id="txs"></div></div>
   <div id="tip"></div>
 </div>
 
@@ -81,7 +81,7 @@ addEventListener('resize', fit); fit();
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const fmt = (n, d = 0) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-// ---- dados sintéticos ----
+// ---- synthetic data ----
 const N = 40, pts = Array.from({ length: N }, (_, i) => 100 + 26 * Math.sin(i / 4.6) + i * 2.1 + 9 * Math.sin(i * 1.9) + (i % 7) * 1.5);
 const cw = 932, ch = 230, mn = Math.min(...pts) - 6, mx = Math.max(...pts) + 6;
 const cx = i => i / (N - 1) * cw, cy = v => ch - (v - mn) / (mx - mn) * (ch - 10) - 4;
@@ -94,7 +94,7 @@ for (let g = 0; g < 4; g++) { const l = document.createElementNS('http://www.w3.
 $$('.sp').forEach((p, k) => { const a = Array.from({ length: 12 }, (_, i) => [i * 332 / 11, 24 - 16 * Math.sin(i * .7 + k * 1.3) - i * (k === 2 ? -.6 : 1.1)]); p.setAttribute('d', smooth(a)); p.style.strokeDasharray = p.getTotalLength(); });
 
 // donut
-const alloc = [['Ações', 46, '#4f7bff'], ['Cripto', 18, '#a78bfa'], ['Renda fixa', 24, '#22d3ee'], ['Caixa', 12, '#fbbf24']];
+const alloc = [['Stocks', 46, '#4f7bff'], ['Crypto', 18, '#a78bfa'], ['Bonds', 24, '#22d3ee'], ['Cash', 12, '#fbbf24']];
 const CIRC = 2 * Math.PI * 70, segs = [];
 let acc = 0;
 alloc.forEach(([n, p, c]) => {
@@ -103,26 +103,26 @@ alloc.forEach(([n, p, c]) => {
   $('#donut').appendChild(ci); segs.push({ ci, p, off: acc }); acc += p;
   const row = document.createElement('div'); row.innerHTML = `<i style="background:${c}"></i>${n}<b>${p}%</b>`; $('#legend').appendChild(row);
 });
-// transações
-const txd = [['Transferência da poupança', 'Entrada', '+$1,250.00', '#34d399', 1], ['Apple Store', 'Compras', '−$1,299.00', '#fda4af'], ['Nova Labs · Salário', 'Renda', '+$8,400.00', '#6ee7b7'], ['Netflix', 'Assinaturas', '−$15.99', '#fda4af'], ['Dividendo VTI', 'Investimentos', '+$312.40', '#6ee7b7']];
+// transactions
+const txd = [['Transfer from savings', 'Deposit', '+$1,250.00', '#34d399', 1], ['Apple Store', 'Shopping', '−$1,299.00', '#fda4af'], ['Nova Labs · Salary', 'Income', '+$8,400.00', '#6ee7b7'], ['Netflix', 'Subscriptions', '−$15.99', '#fda4af'], ['VTI dividend', 'Investments', '+$312.40', '#6ee7b7']];
 txd.forEach(([n, c, a, col, isNew], i) => {
   const r = document.createElement('div'); r.className = 'tx'; r.id = i === 0 ? 'newtx' : '';
   r.innerHTML = `<div class="ic" style="background:${col}33;box-shadow:inset 0 0 0 2px ${col}66"></div><div class="n">${n}</div><div class="c">${c}</div><div class="a" style="color:${col}">${a}</div>`;
   $('#txs').appendChild(r);
 });
 
-// tooltip interativo
+// interactive tooltip
 const tip = $('#tip');
 $('#hit').addEventListener('pointermove', e => {
   const r = $('#chart').getBoundingClientRect(), sc = r.width / cw, x = Math.min(cw, Math.max(0, (e.clientX - r.left) / sc)), i = Math.round(x / cw * (N - 1));
   $('#cl').style.display = $('#cd').style.display = 'block'; $('#cl').setAttribute('x1', cx(i)); $('#cl').setAttribute('x2', cx(i)); $('#cd').setAttribute('cx', cx(i)); $('#cd').setAttribute('cy', cy(pts[i]));
   const cr = stage.getBoundingClientRect(), s2 = cr.width / W;
-  tip.style.display = 'block'; tip.textContent = `Dia ${i + 1} · ${fmt(pts[i] * 1000, 0)}`;
+  tip.style.display = 'block'; tip.textContent = `Day ${i + 1} · ${fmt(pts[i] * 1000, 0)}`;
   tip.style.left = ((e.clientX - cr.left) / s2 + 18) + 'px'; tip.style.top = ((e.clientY - cr.top) / s2 - 56) + 'px';
 });
 $('#hit').addEventListener('pointerleave', () => { $('#cl').style.display = $('#cd').style.display = tip.style.display = 'none'; });
 
-// ---- estado animado ----
+// ---- animated state ----
 const S = { bal: 0, inc: 0, exp: 0, sav: 0, line: 0, donut: 0, out: 1, nt: 0 };
 function paint() {
   $('#v0').textContent = fmt(S.bal, 2); $('#v1').textContent = fmt(S.inc); $('#v2').textContent = fmt(S.exp); $('#v3').textContent = S.sav.toFixed(1) + '%';

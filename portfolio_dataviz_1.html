@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Dataviz · Monitor de agentes de IA</title>
+<title>Portfolio Dataviz · AI agents monitor</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -30,15 +30,15 @@
 <body>
 <div id="stage">
   <canvas id="cv" width="1920" height="1080"></canvas>
-  <div id="title"><b>Agent Monitor</b><span>Orquestração multiagente · tempo real (simulado) · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <div id="title"><b>Agent Monitor</b><span>Multi-agent orchestration · real-time style (simulated) · <i id="tc" style="font-style:normal">0.00s</i></span></div>
   <div id="side">
-    <div class="kp"><div><small>Agentes ativos</small><b id="k0">0/18</b></div><div><small>Tokens / s</small><b id="k1">0</b></div></div>
-    <div class="kp"><div><small>Latência p95</small><b id="k2">0 ms</b></div><div><small>Taxa de sucesso</small><b id="k3">0%</b></div></div>
+    <div class="kp"><div><small>Active agents</small><b id="k0">0/18</b></div><div><small>Tokens / s</small><b id="k1">0</b></div></div>
+    <div class="kp"><div><small>p95 latency</small><b id="k2">0 ms</b></div><div><small>Success rate</small><b id="k3">0%</b></div></div>
     <canvas id="spk" width="444" height="90"></canvas>
-    <div id="logh">Eventos</div><div id="log"></div>
+    <div id="logh">Events</div><div id="log"></div>
   </div>
   <div id="tip"></div>
-  <div id="hud">Passe o mouse nos nós · dados sintéticos</div>
+  <div id="hud">Hover the nodes · synthetic data</div>
 </div>
 
 <script>
@@ -48,7 +48,7 @@ function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.styl
 addEventListener('resize', fit); fit();
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), smooth = (a, b, x) => { x = clamp((x - a) / (b - a)); return x * x * (3 - 2 * x); };
 
-// ---- grafo ----
+// ---- graph ----
 const N = [
   ['Orchestrator', 'core', 40], ['Planner', 'agent', 28], ['Researcher A', 'agent', 26], ['Researcher B', 'agent', 26], ['Researcher C', 'agent', 26],
   ['Coder A', 'agent', 26], ['Coder B', 'agent', 26], ['Reviewer', 'agent', 28], ['Memory', 'tool', 20], ['Web Search', 'tool', 20], ['Browser', 'tool', 20],
@@ -56,7 +56,7 @@ const N = [
 ].map(([name, type, r], i) => ({ i, name, type, r, x: 0, y: 0, vx: 0, vy: 0 }));
 const E = [[0,1],[0,16],[16,2],[16,3],[16,4],[2,9],[3,10],[4,11],[1,5],[1,6],[5,12],[6,13],[5,7],[6,7],[7,15],[15,0],[14,0],[2,14],[3,14],[8,0],[8,1],[17,0],[17,7]]
   .map(([a, b], k) => ({ a: N[a], b: N[b], per: [2, 4, 8, 4][k % 4], ph: (k * 0.77) % 8 }));
-// layout de forças com semente (determinístico)
+// seeded force layout (deterministic)
 (function layout() {
   let s = 12345; const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
   N.forEach(n => { n.x = 640 + (rnd() - .5) * 600; n.y = 540 + (rnd() - .5) * 600; });
@@ -71,10 +71,10 @@ const E = [[0,1],[0,16],[16,2],[16,3],[16,4],[2,9],[3,10],[4,11],[1,5],[1,6],[5,
   N.forEach(n => { n.x = 110 + (n.x - x0) / (x1 - x0) * 1060; n.y = 190 + (n.y - y0) / (y1 - y0) * 740; n.bx = n.x; n.by = n.y; });
 })();
 
-const LOG = [[.3,'INFO','orchestrator','task #4821 recebida'],[.8,'INFO','planner','decomposto em 4 subtarefas'],[1.3,'INFO','router','dispatch → researcher-a/b/c'],[1.9,'INFO','researcher-a','web_search("agent evals") ✓'],
-  [2.4,'INFO','researcher-b','browser.open(docs) ✓'],[3.0,'WARN','researcher-c','vector_db timeout 1.8s · retry 1/3'],[3.6,'INFO','coder-a','sandbox.run(tests) 42/42 ✓'],[4.2,'INFO','summarizer','3 fontes consolidadas'],
-  [4.8,'INFO','coder-b','github.pr.create → pendente'],[5.1,'ERROR','coder-b','sandbox OOM (512 MB)'],[5.6,'INFO','coder-b','retry com 1 GB ✓'],[6.1,'INFO','reviewer','2 comentários · 0 bloqueios'],
-  [6.6,'INFO','critic','score 0.94'],[7.0,'INFO','orchestrator','tarefa concluída em 6.7 s']];
+const LOG = [[.3,'INFO','orchestrator','task #4821 received'],[.8,'INFO','planner','decomposed into 4 subtasks'],[1.3,'INFO','router','dispatch → researcher-a/b/c'],[1.9,'INFO','researcher-a','web_search("agent evals") ✓'],
+  [2.4,'INFO','researcher-b','browser.open(docs) ✓'],[3.0,'WARN','researcher-c','vector_db timeout 1.8s · retry 1/3'],[3.6,'INFO','coder-a','sandbox.run(tests) 42/42 ✓'],[4.2,'INFO','summarizer','3 sources merged'],
+  [4.8,'INFO','coder-b','github.pr.create → pending'],[5.1,'ERROR','coder-b','sandbox OOM (512 MB)'],[5.6,'INFO','coder-b','retry with 1 GB ✓'],[6.1,'INFO','reviewer','2 comments · 0 blockers'],
+  [6.6,'INFO','critic','score 0.94'],[7.0,'INFO','orchestrator','task completed in 6.7 s']];
 function status(n, t) {
   if (n.name === 'Researcher C' && t >= 3.0 && t < 4.6) return 'warn';
   if (n.name === 'Coder B' && t >= 5.0 && t < 5.7) return 'err';
@@ -86,7 +86,7 @@ const toStage = e => { const r = stage.getBoundingClientRect(); return [(e.clien
 cv.addEventListener('pointermove', e => {
   const [x, y] = toStage(e); hover = null;
   for (const n of N) if (Math.hypot(n.x - x, n.y - y) < n.r + 10) hover = n;
-  if (hover) { tip.style.display = 'block'; tip.innerHTML = `<b>${hover.name}</b><br><span style="color:#8da0cf">${hover.type === 'tool' ? 'Ferramenta' : hover.type === 'core' ? 'Orquestrador' : 'Agente'}</span><br>${E.filter(e => e.a === hover || e.b === hover).length} conexões`;
+  if (hover) { tip.style.display = 'block'; tip.innerHTML = `<b>${hover.name}</b><br><span style="color:#8da0cf">${hover.type === 'tool' ? 'Tool' : hover.type === 'core' ? 'Orchestrator' : 'Agent'}</span><br>${E.filter(e => e.a === hover || e.b === hover).length} connections`;
     tip.style.left = (hover.x + hover.r + 16) + 'px'; tip.style.top = (hover.y - 30) + 'px'; } else tip.style.display = 'none';
 });
 cv.addEventListener('pointerleave', () => { hover = null; tip.style.display = 'none'; });
@@ -99,19 +99,19 @@ function render(t) {
   ctx.clearRect(0, 0, W, H);
   const fin = smooth(0, 1.0, t) * (1 - smooth(7.3, 7.95, t));
   ctx.globalAlpha = fin;
-  // arestas
+  // edges
   for (const e of E) {
     const hi = hover && (e.a === hover || e.b === hover);
     ctx.strokeStyle = hi ? 'rgba(160,200,255,.7)' : 'rgba(110,150,230,.22)'; ctx.lineWidth = hi ? 3 : 1.6;
     ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
-    // pacotes
-    const prog = ((t + e.ph) / (e.per / 2)) % 1;       // 2 pacotes por período
+    // packets
+    const prog = ((t + e.ph) / (e.per / 2)) % 1;       // 2 packets per period
     for (const off of [0, .5]) {
       const q = (prog + off) % 1, x = e.a.x + (e.b.x - e.a.x) * q, y = e.a.y + (e.b.y - e.a.y) * q;
       ctx.save(); ctx.fillStyle = '#9fe8ff'; ctx.shadowColor = '#5cd2ff'; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, TAU); ctx.fill(); ctx.restore();
     }
   }
-  // nós
+  // nodes
   for (const n of N) {
     const st = status(n, t), c = COL[st], pulse = .5 + .5 * Math.sin(ph * 4 + n.i), r = n.r;
     let act = 0; for (const e of E) if (e.b === n) { const prog = ((t + e.ph) / (e.per / 2)) % 1; act = Math.max(act, Math.exp(-7 * (prog % .5))); }
@@ -124,7 +124,7 @@ function render(t) {
     ctx.fillStyle = '#dbe5ff'; ctx.font = (n.type === 'core' ? '700 22px' : '600 18px') + ' Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(n.name, n.x, n.y + r + 26);
   }
   ctx.globalAlpha = 1;
-  // painel
+  // panel
   const visible = LOG.filter(l => l[0] <= t).slice(-9).reverse();
   $('log').innerHTML = visible.map(l => `<div class="${l[1]}">${l[0].toFixed(1).padStart(4, ' ')}s  ${l[1].padEnd(5, ' ')} ${l[2]}: ${l[3]}</div>`).join('');
   const act = N.filter(n => status(n, t) !== 'err').length;

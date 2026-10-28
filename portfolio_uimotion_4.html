@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -44,19 +44,19 @@
 <body>
 <div id="stage">
   <div class="bl" style="width:800px;height:800px;left:560px;top:-460px"></div>
-  <div id="head"><div class="k">PRICING</div><h1>Preço simples e transparente</h1><p>Escolha o plano ideal. Mude de ciclo quando quiser.</p></div>
-  <div id="tg"><span class="lb" id="lm">Mensal</span><div id="sw"><div id="kn"></div></div><span class="lb" id="ly">Anual</span></div>
-  <div id="bdg">Economize 20%</div>
+  <div id="head"><div class="k">PRICING</div><h1>Simple, transparent pricing</h1><p>Pick the plan that fits. Switch billing cycle any time.</p></div>
+  <div id="tg"><span class="lb" id="lm">Monthly</span><div id="sw"><div id="kn"></div></div><span class="lb" id="ly">Yearly</span></div>
+  <div id="bdg">Save 20%</div>
 
-  <div class="plan" style="left:260px"><h2>Starter</h2><div class="pr"><b data-m="15" data-a="12">$15</b><s>$15</s><span>/mês</span></div><div class="bil"></div>
-    <ul><li><i>✓</i>3 projetos</li><li><i>✓</i>5 GB de armazenamento</li><li><i>✓</i>Exportação em 1080p</li><li><i>✓</i>Suporte por e-mail</li></ul><div class="cta">Começar grátis</div></div>
-  <div class="plan pro" style="left:740px;top:440px;height:604px"><span class="tag">Mais popular</span><h2>Pro</h2><div class="pr"><b data-m="39" data-a="31">$39</b><s>$39</s><span>/mês</span></div><div class="bil"></div>
-    <ul><li><i>✓</i>Projetos ilimitados</li><li><i>✓</i>100 GB de armazenamento</li><li><i>✓</i>Exportação em 4K</li><li><i>✓</i>Colaboração em equipe</li><li><i>✓</i>Suporte prioritário</li></ul><div class="cta">Assinar o Pro</div></div>
-  <div class="plan" style="left:1220px"><h2>Scale</h2><div class="pr"><b data-m="99" data-a="79">$99</b><s>$99</s><span>/mês</span></div><div class="bil"></div>
-    <ul><li><i>✓</i>Tudo do Pro</li><li><i>✓</i>1 TB de armazenamento</li><li><i>✓</i>SSO e auditoria</li><li><i>✓</i>Gerente de conta</li></ul><div class="cta">Falar com vendas</div></div>
+  <div class="plan" style="left:260px"><h2>Starter</h2><div class="pr"><b data-m="15" data-a="12">$15</b><s>$15</s><span>/mo</span></div><div class="bil"></div>
+    <ul><li><i>✓</i>3 projects</li><li><i>✓</i>5 GB storage</li><li><i>✓</i>1080p export</li><li><i>✓</i>Email support</li></ul><div class="cta">Start free</div></div>
+  <div class="plan pro" style="left:740px;top:440px;height:604px"><span class="tag">Most popular</span><h2>Pro</h2><div class="pr"><b data-m="39" data-a="31">$39</b><s>$39</s><span>/mo</span></div><div class="bil"></div>
+    <ul><li><i>✓</i>Unlimited projects</li><li><i>✓</i>100 GB storage</li><li><i>✓</i>4K export</li><li><i>✓</i>Team collaboration</li><li><i>✓</i>Priority support</li></ul><div class="cta">Get Pro</div></div>
+  <div class="plan" style="left:1220px"><h2>Scale</h2><div class="pr"><b data-m="99" data-a="79">$99</b><s>$99</s><span>/mo</span></div><div class="bil"></div>
+    <ul><li><i>✓</i>Everything in Pro</li><li><i>✓</i>1 TB storage</li><li><i>✓</i>SSO and audit logs</li><li><i>✓</i>Account manager</li></ul><div class="cta">Talk to sales</div></div>
 
   <div id="rip"></div><div id="cur"></div>
-  <div id="hud">Clique no seletor · <span id="tc">0.00s</span></div>
+  <div id="hud">Click the toggle · <span id="tc">0.00s</span></div>
 </div>
 
 <script>
@@ -81,7 +81,7 @@ function paint() {
     const b = p.querySelector('b'), s = p.querySelector('s'), bil = p.querySelector('.bil');
     const mp = +b.dataset.m, ap = +b.dataset.a;
     b.textContent = '$' + Math.round(lerp(mp, ap, m)); s.style.opacity = m; s.style.textDecoration = 'line-through';
-    bil.textContent = m > .5 ? `cobrado anualmente · $${ap * 12}/ano` : 'cobrado mensalmente';
+    bil.textContent = m > .5 ? `billed yearly · $${ap * 12}/year` : 'billed monthly';
   });
   $('#head').style.opacity = clamp(S.in * 3) * S.out; $('#head').style.transform = `translateY(${(1 - clamp(S.in * 3)) * -30}px)`;
   $('#tg').style.opacity = clamp(S.in * 3 - .3) * S.out;
@@ -107,7 +107,7 @@ tl.to(S, { mode: 0, duration: .8, ease: 'power3.inOut' }, 5.5)
   .to(S, { out: 0, duration: .6, ease: 'power2.in' }, 7.3)
   .to({}, { duration: .001 }, D - .001);
 
-// modo usuário
+// user mode
 let user = false;
 function takeOver() { if (user) return; user = true; tl.pause(); S.in = 1; S.out = 1; S.curv = 0; }
 const setMode = v => { takeOver(); gsap.to(S, { mode: v, duration: .7, ease: 'power3.inOut' }); gsap.to(S, { badge: v, duration: .55, ease: v ? 'back.out(2)' : 'power2.in' }); };

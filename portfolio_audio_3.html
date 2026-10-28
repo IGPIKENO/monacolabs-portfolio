@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Áudio · Drum machine</title>
+<title>Portfolio Audio · Drum machine</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -33,8 +33,8 @@
 </head>
 <body>
 <div id="stage">
-  <div id="title"><b>Beat Machine</b><span>16 steps · 120 BPM · <i id="mode" style="font-style:normal">demo sintético</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
-  <div id="ctl"><button id="rand">Aleatório</button><button id="clr">Limpar</button><button id="btn">▶ Ativar áudio ao vivo</button></div>
+  <div id="title"><b>Beat Machine</b><span>16 steps · 120 BPM · <i id="mode" style="font-style:normal">synthetic demo</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <div id="ctl"><button id="rand">Random</button><button id="clr">Clear</button><button id="btn">▶ Enable live audio</button></div>
   <div id="nums"></div>
   <div id="seq"></div>
   <canvas id="wave" width="1680" height="330"></canvas>
@@ -47,10 +47,10 @@ const tcEl = document.getElementById('tc'), modeEl = document.getElementById('mo
 function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit();
 
-// ===== Motor de áudio procedural (Web Audio) + modelos sintéticos determinísticos =====
-// Sem arquivos externos: bateria, baixo e analisadores nascem de osciladores/ruído.
-// Modo "demo": curvas sintéticas puras de t (loop de 8 s, funcionam com seek).
-// Modo "ao vivo": após um clique do usuário, AnalyserNodes reais alimentam as visualizações.
+// ===== Procedural audio engine (Web Audio) + deterministic synthetic models =====
+// No external files: drums, bass and analyzers come from oscillators/noise.
+// "demo" mode: pure synthetic curves of t (8 s loop, works with seek).
+// "live" mode: after a user click, real AnalyserNodes drive the visuals.
 const Engine = (() => {
   let ac, bus, master, an, anL, anR, started = false, timer = null, nextT = 0, step = 0, noiseBuf, pattern = null, eq = [];
   const edges = Array.from({ length: 65 }, (_, i) => 40 * Math.pow(16000 / 40, i / 64));
@@ -99,7 +99,7 @@ const Engine = (() => {
       noiseBuf = noise(); started = true; ac.resume(); nextT = ac.currentTime + .08; step = 0; timer = setInterval(sched, 25);
     },
     stop() { if (!started) return; clearInterval(timer); ac.suspend(); started = false; ac.close(); },
-    // 64 bandas logarítmicas (40 Hz–16 kHz), valores 0..1
+    // 64 log-spaced bands (40 Hz–16 kHz), values 0..1
     spectrum(outArr) {
       if (!started) return false;
       const u = new Uint8Array(an.frequencyBinCount), nyq = ac.sampleRate / 2, n = u.length; an.getByteFrequencyData(u);
@@ -115,7 +115,7 @@ const Engine = (() => {
   };
 })();
 
-// Modelos sintéticos puros de t (120 BPM; período de 8 s => loop perfeito)
+// Pure synthetic models of t (120 BPM; 8 s period => perfect loop)
 function synthSpec(t, outArr) {
   const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
   const kick = Math.exp(-bf * 7) * (bi % 4 === 0 ? 1 : .9), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
@@ -143,7 +143,7 @@ const tracks = [
   { name: 'HAT',   v: 'hat',   c: '#fbbf24', dec: 22, k: 11,  pat: [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1] },
   { name: 'CLAP',  v: 'clap',  c: '#a78bfa', dec: 12, k: 7,   pat: [0,0,0,0, 0,0,0,0, 0,0,0,0, 1,0,0,0] }
 ];
-// grade
+// grid
 const seq = document.getElementById('seq'), nums = document.getElementById('nums'), cells = [];
 for (let s = 0; s < 16; s++) { const n = document.createElement('span'); n.textContent = s + 1; if (s && s % 4 === 0) n.className = 'g4'; nums.appendChild(n); }
 tracks.forEach((tr, i) => {
@@ -164,12 +164,12 @@ document.getElementById('clr').onclick = () => tracks.forEach(tr => tr.pat = tr.
 let live = false;
 const patFn = s => { const v = []; tracks.forEach(tr => { if (tr.pat[s]) v.push(tr.v); }); if (s % 4 === 0) v.push('bass:' + [55, 55, 65.41, 49][Math.floor(s / 4)]); return v; };
 btn.onclick = () => {
-  if (!live) { Engine.start(patFn); live = true; btn.textContent = '■ Voltar ao demo'; btn.classList.add('on'); modeEl.textContent = 'áudio ao vivo (Web Audio)'; }
-  else { Engine.stop(); live = false; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); modeEl.textContent = 'demo sintético'; }
+  if (!live) { Engine.start(patFn); live = true; btn.textContent = '■ Back to demo'; btn.classList.add('on'); modeEl.textContent = 'live audio (Web Audio)'; }
+  else { Engine.stop(); live = false; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); modeEl.textContent = 'synthetic demo'; }
 };
 
 const wv = document.getElementById('wave'), wx = wv.getContext('2d');
-function envOf(tr, t) {   // envelope do último acerto da trilha (determinístico)
+function envOf(tr, t) {   // envelope of the track's last hit (deterministic)
   const cur = Math.floor(t * 8 + 1e-6);
   for (let k = 0; k < 24; k++) { const st = cur - k, idx = ((st % 16) + 16) % 16; if (tr.pat[idx]) return Math.exp(-(t - st / 8) * tr.dec); }
   return 0;
@@ -207,7 +207,7 @@ function render(t, liveLoop) {
 }
 let manual = false, start = performance.now();
 window.DURATION = D;
-window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'demo sintético'; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
+window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'synthetic demo'; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
 window.resume = () => { manual = false; start = performance.now(); };
 (function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
 window.__ready = true;

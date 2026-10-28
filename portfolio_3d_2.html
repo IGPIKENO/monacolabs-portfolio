@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio 3D · Vidro líquido</title>
+<title>Portfolio 3D · Liquid glass</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<div id="stage"><div id="hud">Shader de vidro líquido · refração + aberração cromática · <span id="tc">0.00s</span></div></div>
+<div id="stage"><div id="hud">Liquid glass shader · refraction + chromatic aberration · <span id="tc">0.00s</span></div></div>
 
 <script type="module">
 import * as THREE from './vendor/three/build/three.module.js';
@@ -31,7 +31,7 @@ stage.addEventListener('pointermove', e => {
 const cursorAt = (t, live) => (live && performance.now() - ptr.last < 3000) ? [ptr.x, ptr.y]
   : [W / 2 + Math.sin(TAU * t / D) * 640, H / 2 + Math.sin(TAU * 2 * t / D + 1) * 300];
 
-// ---- Textura de fundo (texto grande + formas) desenhada em Canvas 2D ----
+// ---- Background texture (large text + shapes) drawn with Canvas 2D ----
 const bgc = document.createElement('canvas'); bgc.width = W; bgc.height = H;
 function drawBg() {
   const x = bgc.getContext('2d');
@@ -76,7 +76,7 @@ const mat = new THREE.ShaderMaterial({
     }
     vec3 base(vec2 px){
       vec2 uv = px/uRes;
-      // fundo: blobs coloridos periódicos
+      // background: periodic colored blobs
       vec3 c = vec3(.03,.04,.10);
       c += .55*vec3(.20,.35,1.0) * smoothstep(.75, 0., length(uv-vec2(.25+.1*sin(uPhase), .65+.1*cos(uPhase*2.))));
       c += .55*vec3(1.0,.25,.65) * smoothstep(.70, 0., length(uv-vec2(.78+.08*cos(uPhase*2.), .35+.1*sin(uPhase))));
@@ -84,7 +84,7 @@ const mat = new THREE.ShaderMaterial({
       vec4 t = texture2D(uBg, uv);
       return mix(c, t.rgb, t.a);
     }
-    vec3 tap(vec2 px){ // desfoque leve (vidro fosco)
+    vec3 tap(vec2 px){ // light blur (frosted glass)
       vec3 s = base(px)*.4;
       s += base(px+vec2( 5., 3.))*.15 + base(px+vec2(-5.,-3.))*.15 + base(px+vec2(-3., 5.))*.15 + base(px+vec2( 3.,-5.))*.15;
       return s;
@@ -97,13 +97,13 @@ const mat = new THREE.ShaderMaterial({
       vec2 g = vec2(field(p+vec2(e,0.))-field(p-vec2(e,0.)), field(p+vec2(0.,e))-field(p-vec2(0.,e)));
       vec2 n = normalize(g + 1e-5);
       if (d > 0.) {
-        col *= 1. - .35*exp(-d/38.);                  // sombra projetada
+        col *= 1. - .35*exp(-d/38.);                  // drop shadow
       } else {
         float depth = -d;
         float edge = 1. - clamp(depth/110., 0., 1.);
         float bend = edge*edge;
-        vec2 off = -n * bend * 120.;                     // refração: lente espessa nas bordas
-        vec2 mag = (p - (p - n*depth)) * 0.0;            // reservado
+        vec2 off = -n * bend * 120.;                     // refraction: thick lens at the edges
+        vec2 mag = (p - (p - n*depth)) * 0.0;            // reserved
         vec3 refr;
         refr.r = tap(p + off*1.00).r;
         refr.g = tap(p + off*1.06).g;
@@ -133,7 +133,7 @@ window.DURATION = D;
 window.seek = s => { manual = true; render(((s % D) + D) % D, false); };
 window.resume = () => { manual = false; start = performance.now(); };
 (function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
-// a fonte Inter chega depois: redesenha a textura quando carregar
+// the Inter font arrives later: redraw the texture once it loads
 if (document.fonts) Promise.all([document.fonts.load('800 380px Inter'), document.fonts.load('500 34px Inter')])
   .then(() => { drawBg(); bgTex.needsUpdate = true; }).catch(() => {});
 window.__ready = true;

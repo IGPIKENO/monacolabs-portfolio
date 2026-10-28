@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Dataviz · Pipeline de automação</title>
+<title>Portfolio Dataviz · Automation pipeline</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -27,38 +27,38 @@ const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS,
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, x) => a + (b - a) * x;
 const smooth = (a, b, x) => { x = clamp((x - a) / (b - a)); return x * x * (3 - 2 * x); };
 
-// ---- nós: [id, título, subtítulo, código, cor, x, y, início, fim] (início/fim da execução em s) ----
+// ---- nodes: [id, title, subtitle, code, color, x, y, start, end] (execution start/end in s) ----
 const NW = 250, NH = 112;
 const nodes = [
-  ['sch', 'Schedule', 'Todo dia 09:00',     'SC', '#a78bfa', 230, 300, .6, 1.2],
+  ['sch', 'Schedule', 'Every day 09:00',     'SC', '#a78bfa', 230, 300, .6, 1.2],
   ['web', 'Webhook',  'POST /leads',        'WH', '#38bdf8', 230, 620, .8, 1.4],
-  ['http','HTTP Request', 'Buscar dados do CRM', 'HT', '#fb923c', 610, 300, 1.8, 2.5],
+  ['http','HTTP Request', 'Fetch CRM data', 'HT', '#fb923c', 610, 300, 1.8, 2.5],
   ['py',  'Python Script', 'clean_leads.py', 'PY', '#facc15', 610, 620, 2.0, 2.9],
-  ['ai',  'AI Agent', 'Classificar intenção', 'AI', '#f472b6', 990, 460, 3.5, 4.8],
+  ['ai',  'AI Agent', 'Classify intent', 'AI', '#f472b6', 990, 460, 3.5, 4.8],
   ['if',  'IF', 'score > 0.8 ?',            'IF', '#34d399', 1330, 460, 5.3, 5.7],
-  ['slk', 'Slack', 'Avisar #vendas',        'SL', '#22d3ee', 1680, 300, 6.3, 6.9],
-  ['gs',  'Google Sheets', 'Registrar lead (ramo falso)', 'GS', '#64748b', 1680, 640, 99, 99]
+  ['slk', 'Slack', 'Notify #sales',        'SL', '#22d3ee', 1680, 300, 6.3, 6.9],
+  ['gs',  'Google Sheets', 'Log lead (false branch)', 'GS', '#64748b', 1680, 640, 99, 99]
 ].map(([id, title, sub, code, col, x, y, t0, t1], i) => ({ id, title, sub, code, col, x, y, t0, t1, i }));
 const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
-// conexões: [de, para, instante em que o pacote parte, duração]
+// connections: [from, to, time the packet departs, duration]
 const conns = [['sch','http',1.2,.6],['web','py',1.4,.6],['http','ai',2.5,.6],['py','ai',2.9,.6],['ai','if',4.8,.5],['if','slk',5.7,.6]].map(([a, b, ts, dur]) => ({ a: byId[a], b: byId[b], ts, dur }));
 conns.push({ a: byId.if, b: byId.gs, ts: 99, dur: .6, skipped: true });
 
 const defs = el('defs', {}, svg);
 const gl = el('filter', { id: 'gl', x: '-60%', y: '-60%', width: '220%', height: '220%' }, defs); el('feGaussianBlur', { stdDeviation: 7, result: 'b' }, gl);
 const fm = el('feMerge', {}, gl); el('feMergeNode', { in: 'b' }, fm); el('feMergeNode', { in: 'SourceGraphic' }, fm);
-// grade de pontos
+// dot grid
 const pat = el('pattern', { id: 'dots', width: 48, height: 48, patternUnits: 'userSpaceOnUse' }, defs); el('circle', { cx: 2, cy: 2, r: 1.6, fill: 'rgba(150,170,230,.18)' }, pat);
 el('rect', { width: W, height: H, fill: 'url(#dots)' }, svg);
 const gConn = el('g', {}, svg), gNode = el('g', {}, svg), gUi = el('g', {}, svg);
 
-// conexões
+// connections
 conns.forEach(c => {
   c.base = el('path', { fill: 'none', stroke: 'rgba(120,150,230,.28)', 'stroke-width': 4, 'stroke-linecap': 'round' }, gConn);
   c.flow = el('path', { fill: 'none', stroke: '#7dd3fc', 'stroke-width': 4, 'stroke-linecap': 'round', filter: 'url(#gl)' }, gConn);
   c.dot = el('circle', { r: 9, fill: '#e0f7ff', filter: 'url(#gl)' }, gConn);
 });
-// nós
+// nodes
 nodes.forEach(n => {
   const g = el('g', { class: 'node' }, gNode); n.g = g;
   n.rect = el('rect', { x: -NW / 2, y: -NH / 2, width: NW, height: NH, rx: 24, fill: '#0e1530', stroke: n.col, 'stroke-width': 3 }, g);
@@ -74,17 +74,17 @@ nodes.forEach(n => {
   n.skip = el('text', { x: NW / 2 - 2, y: -NH / 2 + 8, 'text-anchor': 'middle', fill: '#94a3b8', 'font-size': 20, 'font-weight': 700 }, g); n.skip.textContent = '—';
 });
 
-// UI: título e rodapé de execução
+// UI: title and execution footer
 const title = el('text', { x: 90, y: 110, fill: '#fff', 'font-size': 54, 'font-weight': 800 }, gUi); title.textContent = 'Workflow Automation';
-const sub = el('text', { x: 90, y: 152, fill: '#8da0cf', 'font-size': 26, 'font-weight': 500 }, gUi); sub.textContent = 'Execução #1842 · arraste os nós para reorganizar';
+const sub = el('text', { x: 90, y: 152, fill: '#8da0cf', 'font-size': 26, 'font-weight': 500 }, gUi); sub.textContent = 'Execution #1842 · drag the nodes to rearrange';
 const bar = el('rect', { x: 90, y: 940, width: 1740, height: 12, rx: 6, fill: 'rgba(255,255,255,.1)' }, gUi);
 const barF = el('rect', { x: 90, y: 940, width: 0, height: 12, rx: 6, fill: '#7dd3fc', filter: 'url(#gl)' }, gUi);
 const stat = el('text', { x: 90, y: 1000, fill: '#c3cff0', 'font-size': 26, 'font-weight': 600 }, gUi);
 const badge = el('g', {}, gUi);
 el('rect', { x: 1470, y: 78, width: 360, height: 70, rx: 35, fill: 'rgba(34,197,94,.16)', stroke: '#22c55e', 'stroke-width': 2.5 }, badge);
-el('text', { x: 1650, y: 124, 'text-anchor': 'middle', fill: '#4ade80', 'font-size': 28, 'font-weight': 700 }, badge).textContent = 'Concluída com sucesso';
+el('text', { x: 1650, y: 124, 'text-anchor': 'middle', fill: '#4ade80', 'font-size': 28, 'font-weight': 700 }, badge).textContent = 'Completed successfully';
 
-// ---- arrasto interativo ----
+// ---- interactive dragging ----
 let drag = null;
 const toStage = e => { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
 nodes.forEach(n => n.g.addEventListener('pointerdown', e => { const [x, y] = toStage(e); drag = { n, dx: n.x - x, dy: n.y - y }; n.g.setPointerCapture(e.pointerId); n.g.style.cursor = 'grabbing'; }));
@@ -112,7 +112,7 @@ function render(t) {
     const d = cpath(c); c.base.setAttribute('d', d); c.flow.setAttribute('d', d);
     const L = c.base.getTotalLength(), u = (t - c.ts) / c.dur, active = !c.skipped && u >= 0 && u <= 1, passed = !c.skipped && u > 1;
     c.base.setAttribute('opacity', fin * clamp(smooth(.2, .8, t)));
-    // trecho percorrido: fica aceso depois que o pacote passa
+    // traveled segment: stays lit after the packet passes
     const head = clamp(u) * L; c.flow.setAttribute('stroke-dasharray', `${head} ${L}`); c.flow.setAttribute('opacity', fin * (c.skipped ? 0 : (u > 0 ? (passed ? .45 : 1) : 0)));
     c.flow.setAttribute('stroke', passed ? '#4ade80' : '#7dd3fc');
     c.dot.setAttribute('opacity', active ? fin : 0);
@@ -122,7 +122,7 @@ function render(t) {
   const run = clamp(t / 6.9);
   barF.setAttribute('width', 1740 * run); barF.setAttribute('opacity', fin);
   const done = nodes.filter(n => t >= n.t1 && n.t1 < 90).length;
-  stat.textContent = (t < 6.9 ? 'Executando · ' : 'Concluída · ') + done + '/7 nós · ' + Math.min(6.9, t).toFixed(1) + ' s'; stat.setAttribute('opacity', fin * smooth(.3, .8, t));
+  stat.textContent = (t < 6.9 ? 'Running · ' : 'Completed · ') + done + '/7 nodes · ' + Math.min(6.9, t).toFixed(1) + ' s'; stat.setAttribute('opacity', fin * smooth(.3, .8, t));
   badge.setAttribute('opacity', smooth(6.9, 7.2, t) * fin); badge.setAttribute('transform', `translate(0 ${(1 - smooth(6.9, 7.2, t)) * -16})`);
   title.setAttribute('opacity', smooth(0, .5, t) * fin); sub.setAttribute('opacity', smooth(.1, .6, t) * fin);
   bar.setAttribute('opacity', fin);

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio 3D · Showcase de produto</title>
+<title>Portfolio 3D · Product showcase</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#020308;overflow:hidden}
@@ -30,16 +30,16 @@
 </head>
 <body>
 <div id="stage">
-  <div id="brand"><small>Modelado no Blender · glTF</small><b>Ambre Noir</b><span>Showcase 3D com iluminação de estúdio ajustável</span></div>
+  <div id="brand"><small>Modeled in Blender · glTF</small><b>Ambre Noir</b><span>3D showcase with adjustable studio lighting</span></div>
   <div id="panel">
-    <h3>Estúdio</h3>
-    <div class="row"><label>Luz principal <i id="vKey">1.0</i></label><input id="key" type="range" min="0" max="3" step="0.05" value="1.4"></div>
-    <div class="row"><label>Temperatura <i id="vTemp">quente</i></label><input id="temp" type="range" min="0" max="1" step="0.01" value="0.3"></div>
-    <div class="row"><label>Rotação <i id="vSpin">1×</i></label><input id="spin" type="range" min="0" max="2" step="1" value="1"></div>
-    <div class="row"><label>Líquido</label><div class="sw" id="swLiquid"></div></div>
-    <div class="row" style="margin-bottom:0"><label>Fundo</label><div class="sw" id="swBg"></div></div>
+    <h3>Studio</h3>
+    <div class="row"><label>Key light <i id="vKey">1.0</i></label><input id="key" type="range" min="0" max="3" step="0.05" value="1.4"></div>
+    <div class="row"><label>Temperature <i id="vTemp">warm</i></label><input id="temp" type="range" min="0" max="1" step="0.01" value="0.3"></div>
+    <div class="row"><label>Rotation <i id="vSpin">1×</i></label><input id="spin" type="range" min="0" max="2" step="1" value="1"></div>
+    <div class="row"><label>Liquid</label><div class="sw" id="swLiquid"></div></div>
+    <div class="row" style="margin-bottom:0"><label>Background</label><div class="sw" id="swBg"></div></div>
   </div>
-  <div id="hud">Arraste os controles · <span id="tc">0.00s</span></div>
+  <div id="hud">Drag the controls · <span id="tc">0.00s</span></div>
 </div>
 
 <script type="module">
@@ -64,13 +64,13 @@ scene.environmentIntensity = 0.7;
 const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
 camera.position.set(-2.3, 2.1, 9.6); camera.lookAt(-2.3, 1.45, 0);
 
-// luzes de estúdio: principal (sombra), preenchimento e contraluz
+// studio lights: key (shadows), fill and rim
 const key = new THREE.SpotLight(0xffe2c4, 220, 30, 0.5, 0.7, 1.4); key.position.set(-4.5, 6.5, 5); key.castShadow = true;
 key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004; key.shadow.radius = 6; scene.add(key);
 const fill = new THREE.PointLight(0x7aa2ff, 60, 20, 1.6); fill.position.set(4, 2.5, 4); scene.add(fill);
 const rim = new THREE.PointLight(0xff8ad8, 90, 20, 1.6); rim.position.set(0.5, 3, -5); scene.add(rim);
 
-// plataforma + piso que recebe sombra
+// platform + floor that receives shadows
 const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 0.12, 96),
   new THREE.MeshStandardMaterial({ color: 0x0c0f1c, metalness: 0.9, roughness: 0.22 }));
 disc.position.y = -0.06; disc.receiveShadow = true; scene.add(disc);
@@ -109,10 +109,10 @@ function swatches(el, list, onPick) {
 }
 swatches($('swLiquid'), liquids.map(l => l[0]), i => { if (parts.Liquid) { parts.Liquid.material.color.set(liquids[i][0]); parts.Liquid.material.emissive.set(liquids[i][1]); } });
 swatches($('swBg'), bgs.map(b => [b[0], b[1]]), i => { stage.style.setProperty('--bg1', bgs[i][0]); stage.style.setProperty('--bg2', bgs[i][1]); });
-const spinNames = ['parado', '1×', '2×'];
+const spinNames = ['stopped', '1×', '2×'];
 function readUI() {
   state.keyI = +$('key').value; state.temp = +$('temp').value; state.spin = +$('spin').value;
-  $('vKey').textContent = state.keyI.toFixed(1); $('vTemp').textContent = state.temp < .35 ? 'quente' : state.temp > .65 ? 'fria' : 'neutra'; $('vSpin').textContent = spinNames[state.spin];
+  $('vKey').textContent = state.keyI.toFixed(1); $('vTemp').textContent = state.temp < .35 ? 'warm' : state.temp > .65 ? 'cool' : 'neutral'; $('vSpin').textContent = spinNames[state.spin];
 }
 ['key', 'temp', 'spin'].forEach(id => $(id).addEventListener('input', () => { state.touched = true; readUI(); }));
 readUI();
@@ -121,7 +121,7 @@ const warm = new THREE.Color(0xffc896), cool = new THREE.Color(0xbcd8ff);
 function render(t, live) {
   if (!loaded) return;
   const ph = TAU * t / D;
-  // sem interação: a luz "respira" em loop de 8 s para o seek ser determinístico
+  // without interaction: the light "breathes" in an 8 s loop so seek stays deterministic
   const kI = state.touched ? state.keyI : 1.4 + 0.5 * Math.sin(ph * 2);
   const tp = state.touched ? state.temp : 0.5 + 0.5 * Math.sin(ph);
   key.intensity = 220 * kI / 1.4; key.color.copy(warm).lerp(cool, tp);

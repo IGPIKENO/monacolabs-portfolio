@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio 3D · Hero interativo</title>
+<title>Portfolio 3D · Interactive hero</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -27,11 +27,11 @@
   <div id="copy">
     <div id="kick">Creative Developer · WebGL</div>
     <div id="h1">Interfaces<br>that feel <span>alive.</span></div>
-    <div id="sub">Heróis 3D em tempo real, shaders sob medida e física que responde ao cursor.</div>
+    <div id="sub">Real-time 3D heroes, custom shaders and physics that respond to the cursor.</div>
     <div id="cta">Start a project <b>→</b></div>
   </div>
   <div id="vig"></div>
-  <div id="hud">Mova o mouse · <span id="tc">0.00s</span></div>
+  <div id="hud">Move your mouse · <span id="tc">0.00s</span></div>
 </div>
 
 <script type="module">
@@ -44,7 +44,7 @@ const stage = document.getElementById('stage'), tcEl = document.getElementById('
 function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit();
 
-// ponteiro real (3 s de memória); ocioso => cursor virtual periódico (loop perfeito)
+// real pointer (3 s memory); idle => periodic virtual cursor (perfect loop)
 const ptr = { x: 0, y: 0, last: -1e9 };
 stage.addEventListener('pointermove', e => {
   const r = stage.getBoundingClientRect();
@@ -68,7 +68,7 @@ camera.position.set(0, 0, 9);
 const key = new THREE.DirectionalLight(0x9fd8ff, 2.2); key.position.set(4, 5, 6); scene.add(key);
 const rim = new THREE.DirectionalLight(0xff7ad9, 2.4); rim.position.set(-5, -2, -4); scene.add(rim);
 
-// ---- Blob líquido (displacement + normais recalculadas no shader) ----
+// ---- Liquid blob (displacement + normals recomputed in the shader) ----
 const CENTER = new THREE.Vector3(2.3, 0, 0);
 const blobMat = new CSM({
   baseMaterial: THREE.MeshPhysicalMaterial,
@@ -95,7 +95,7 @@ const blobMat = new CSM({
 const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 64), blobMat);
 blob.position.copy(CENTER); scene.add(blob);
 
-// ---- Estilhaços com mola + repulsão do cursor ----
+// ---- Shards with springs + cursor repulsion ----
 const NS = 170;
 const shardGeo = new THREE.OctahedronGeometry(0.075, 0);
 const shardMat = new THREE.MeshPhysicalMaterial({ color: 0xcfe6ff, metalness: 1, roughness: 0.2, clearcoat: 1 });
@@ -146,7 +146,7 @@ let simT = null;
 function render(t, live) {
   const dt = 1 / 60;
   if (live && simT !== null) { step(t, true, dt); }
-  else {  // seek determinístico: aquece 2 loops e simula até t
+  else {  // deterministic seek: warm up 2 loops and simulate up to t
     const WARM = 2 * D; resetShards(-WARM);
     for (let q = -WARM; q < t; q += dt) step(q, false, dt);
   }

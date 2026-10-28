@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Áudio · Analisador de espectro 3D</title>
+<title>Portfolio Audio · 3D spectrum analyzer</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -23,8 +23,8 @@
 <body>
 <div id="stage">
   <div id="vig"></div>
-  <div id="title"><b>Spectrum 3D</b><span>64 bandas · histórico 3D · <i id="mode" style="font-style:normal">demo sintético</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
-  <button id="btn">▶ Ativar áudio ao vivo</button>
+  <div id="title"><b>Spectrum 3D</b><span>64 bands · 3D history · <i id="mode" style="font-style:normal">synthetic demo</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <button id="btn">▶ Enable live audio</button>
   <div id="axis"><span>40 Hz</span><span>200 Hz</span><span>1 kHz</span><span>5 kHz</span><span>16 kHz</span></div>
 </div>
 
@@ -36,10 +36,10 @@ const stage = document.getElementById('stage'), tcEl = document.getElementById('
 function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit();
 
-// ===== Motor de áudio procedural (Web Audio) + modelos sintéticos determinísticos =====
-// Sem arquivos externos: bateria, baixo e analisadores nascem de osciladores/ruído.
-// Modo "demo": curvas sintéticas puras de t (loop de 8 s, funcionam com seek).
-// Modo "ao vivo": após um clique do usuário, AnalyserNodes reais alimentam as visualizações.
+// ===== Procedural audio engine (Web Audio) + deterministic synthetic models =====
+// No external files: drums, bass and analyzers come from oscillators/noise.
+// "demo" mode: pure synthetic curves of t (8 s loop, works with seek).
+// "live" mode: after a user click, real AnalyserNodes drive the visuals.
 const Engine = (() => {
   let ac, bus, master, an, anL, anR, started = false, timer = null, nextT = 0, step = 0, noiseBuf, pattern = null, eq = [];
   const edges = Array.from({ length: 65 }, (_, i) => 40 * Math.pow(16000 / 40, i / 64));
@@ -88,7 +88,7 @@ const Engine = (() => {
       noiseBuf = noise(); started = true; ac.resume(); nextT = ac.currentTime + .08; step = 0; timer = setInterval(sched, 25);
     },
     stop() { if (!started) return; clearInterval(timer); ac.suspend(); started = false; ac.close(); },
-    // 64 bandas logarítmicas (40 Hz–16 kHz), valores 0..1
+    // 64 log-spaced bands (40 Hz–16 kHz), values 0..1
     spectrum(outArr) {
       if (!started) return false;
       const u = new Uint8Array(an.frequencyBinCount), nyq = ac.sampleRate / 2, n = u.length; an.getByteFrequencyData(u);
@@ -104,7 +104,7 @@ const Engine = (() => {
   };
 })();
 
-// Modelos sintéticos puros de t (120 BPM; período de 8 s => loop perfeito)
+// Pure synthetic models of t (120 BPM; 8 s period => perfect loop)
 function synthSpec(t, outArr) {
   const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
   const kick = Math.exp(-bf * 7) * (bi % 4 === 0 ? 1 : .9), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
@@ -128,8 +128,8 @@ function synthLevels(t) {
 
 let live = false;
 btn.onclick = () => {
-  if (!live) { Engine.start(); live = true; btn.textContent = '■ Voltar ao demo'; btn.classList.add('on'); modeEl.textContent = 'áudio ao vivo (Web Audio)'; }
-  else { Engine.stop(); live = false; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); modeEl.textContent = 'demo sintético'; }
+  if (!live) { Engine.start(); live = true; btn.textContent = '■ Back to demo'; btn.classList.add('on'); modeEl.textContent = 'live audio (Web Audio)'; }
+  else { Engine.stop(); live = false; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); modeEl.textContent = 'synthetic demo'; }
 };
 
 const NB = 64, NR = 30;
@@ -148,12 +148,12 @@ const hist = Array.from({ length: NR }, () => new Float32Array(NB));
 let lastPush = -1;
 const tmpS = new Float32Array(NB), dummy = new THREE.Object3D(), col = new THREE.Color();
 
-function rowData(t, r) {   // linha r = espectro de (t - r*0.07 s)
+function rowData(t, r) {   // row r = spectrum at (t - r*0.07 s)
   if (live && Engine.started) return hist[r];
   synthSpec(((t - r * 0.07) % D + D) % D, tmpS); return tmpS;
 }
 function render(t, liveLoop) {
-  if (live && Engine.started && liveLoop) {   // histórico real: empurra um novo frame ~14×/s
+  if (live && Engine.started && liveLoop) {   // real history: pushes a new frame ~14×/s
     if (t - lastPush > 0.07 || t < lastPush) {
       lastPush = t; const f = hist.pop(); Engine.spectrum(f); hist.unshift(f);
     }
@@ -180,7 +180,7 @@ function render(t, liveLoop) {
 
 let manual = false, start = performance.now();
 window.DURATION = D;
-window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'demo sintético'; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
+window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'synthetic demo'; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
 window.resume = () => { manual = false; start = performance.now(); };
 (function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
 window.__ready = true;

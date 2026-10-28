@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio UI Motion · Dock com física de mola</title>
+<title>Portfolio UI Motion · Spring-physics dock</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -30,13 +30,13 @@
 <div id="stage">
   <div class="bl" style="width:700px;height:700px;left:-120px;top:-200px;background:#4f7bff"></div>
   <div class="bl" style="width:640px;height:640px;right:-100px;top:200px;background:#ff5fa2"></div>
-  <div id="menubar"><span>●  Dock Motion</span><span style="font-weight:500">Arquivo</span><span style="font-weight:500">Editar</span><span style="font-weight:500">Visualizar</span><span class="r">Ter 27 out  12:30</span></div>
-  <div id="win"><div class="tb"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><b>Projetos</b></div>
+  <div id="menubar"><span>●  Dock Motion</span><span style="font-weight:500">File</span><span style="font-weight:500">Edit</span><span style="font-weight:500">View</span><span class="r">Tue Oct 27  12:30</span></div>
+  <div id="win"><div class="tb"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><b>Projects</b></div>
     <div class="ln" style="width:70%"></div><div class="ln" style="width:55%"></div><div class="ln" style="width:80%"></div><div class="ln" style="width:40%"></div></div>
   <div id="dock"></div>
   <div id="lab"></div>
   <div id="cur"></div>
-  <div id="hud">Passe o mouse no dock · clique para saltar · <span id="tc">0.00s</span></div>
+  <div id="hud">Hover the dock · click to bounce · <span id="tc">0.00s</span></div>
 </div>
 
 <script>
@@ -46,18 +46,18 @@ function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.styl
 addEventListener('resize', fit); fit();
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 
-// ---- ícones (SVG simples, estilo consistente) ----
+// ---- icons (simple SVG, consistent style) ----
 const st = 'fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"';
 const apps = [
-  ['Finder', ['#3aa0ff', '#1f5fe0'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="17" ${st}/><path d="M16 29c5 5 11 5 16 0M17 18v4M31 18v4" ${st}/></svg>`],
-  ['Safari', ['#4cc9ff', '#2a74ff'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18" ${st}/><path d="M30 18l-4 8-8 4 4-8z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`],
+  ['Files', ['#3aa0ff', '#1f5fe0'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="17" ${st}/><path d="M16 29c5 5 11 5 16 0M17 18v4M31 18v4" ${st}/></svg>`],
+  ['Browser', ['#4cc9ff', '#2a74ff'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18" ${st}/><path d="M30 18l-4 8-8 4 4-8z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`],
   ['Mail', ['#5db8ff', '#2f6bff'], `<svg viewBox="0 0 48 48"><rect x="7" y="12" width="34" height="24" rx="5" ${st}/><path d="M9 15l15 12 15-12" ${st}/></svg>`],
-  ['Música', ['#ff6b8b', '#e0245e'], `<svg viewBox="0 0 48 48"><path d="M19 34V14l16-4v20" ${st}/><circle cx="15" cy="34" r="5" fill="#fff"/><circle cx="31" cy="30" r="5" fill="#fff"/></svg>`],
-  ['Fotos', ['#ffd166', '#ff7a59'], `<svg viewBox="0 0 48 48"><g fill="#fff">${[0,1,2,3,4,5,6,7].map(i=>`<circle cx="${24+11*Math.cos(i*Math.PI/4)}" cy="${24+11*Math.sin(i*Math.PI/4)}" r="5" opacity=".92"/>`).join('')}</g></svg>`],
-  ['Notas', ['#ffe066', '#f5b301'], `<svg viewBox="0 0 48 48"><path d="M13 16h22M13 24h22M13 32h14" ${st}/></svg>`],
+  ['Music', ['#ff6b8b', '#e0245e'], `<svg viewBox="0 0 48 48"><path d="M19 34V14l16-4v20" ${st}/><circle cx="15" cy="34" r="5" fill="#fff"/><circle cx="31" cy="30" r="5" fill="#fff"/></svg>`],
+  ['Photos', ['#ffd166', '#ff7a59'], `<svg viewBox="0 0 48 48"><g fill="#fff">${[0,1,2,3,4,5,6,7].map(i=>`<circle cx="${24+11*Math.cos(i*Math.PI/4)}" cy="${24+11*Math.sin(i*Math.PI/4)}" r="5" opacity=".92"/>`).join('')}</g></svg>`],
+  ['Notes', ['#ffe066', '#f5b301'], `<svg viewBox="0 0 48 48"><path d="M13 16h22M13 24h22M13 32h14" ${st}/></svg>`],
   ['Terminal', ['#2b2f3a', '#0c0e14'], `<svg viewBox="0 0 48 48"><path d="M12 15l10 9-10 9M26 34h12" ${st}/></svg>`],
-  ['Ajustes', ['#a7b0c4', '#6a7389'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="7" ${st}/><path d="M24 7v6M24 35v6M7 24h6M35 24h6M12 12l4 4M32 32l4 4M36 12l-4 4M16 32l-4 4" ${st}/></svg>`],
-  ['Lixeira', ['#7f8aa3', '#4a526a'], `<svg viewBox="0 0 48 48"><path d="M14 16h20l-2 22H16zM11 16h26M19 16v-4h10v4" ${st}/></svg>`]
+  ['Settings', ['#a7b0c4', '#6a7389'], `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="7" ${st}/><path d="M24 7v6M24 35v6M7 24h6M35 24h6M12 12l4 4M32 32l4 4M36 12l-4 4M16 32l-4 4" ${st}/></svg>`],
+  ['Trash', ['#7f8aa3', '#4a526a'], `<svg viewBox="0 0 48 48"><path d="M14 16h20l-2 22H16zM11 16h26M19 16v-4h10v4" ${st}/></svg>`]
 ];
 const N = apps.length, BASE = 90, GAP = 18, PAD = 26, SIG = 150, AMP = 1.0;
 const icons = apps.map(([name, [c1, c2], svg], i) => {
@@ -68,25 +68,25 @@ const icons = apps.map(([name, [c1, c2], svg], i) => {
 const baseW = N * BASE + (N - 1) * GAP, CX = W / 2;
 const restX = i => CX - baseW / 2 + i * (BASE + GAP) + BASE / 2;
 
-// ---- ponteiro: real (3 s de memória) ou cursor virtual periódico ----
+// ---- pointer: real (3 s memory) or periodic virtual cursor ----
 const ptr = { x: 0, y: 0, last: -1e9 };
 stage.addEventListener('pointermove', e => { const r = stage.getBoundingClientRect(); ptr.x = (e.clientX - r.left) / r.width * W; ptr.y = (e.clientY - r.top) / r.height * H; ptr.last = performance.now(); });
 const isReal = live => live && performance.now() - ptr.last < 3000;
 const cursorAt = (t, live) => isReal(live) ? [ptr.x, ptr.y] : [CX + Math.sin(TAU * t / D) * 650 * (.85 + .15 * Math.sin(TAU * 2 * t / D)), 1015 - 95 * (.5 - .5 * Math.cos(TAU * 2 * t / D + .6))];
 
-// cliques de demonstração (índice do app, instante)
+// demo clicks (app index, time)
 const demoClicks = [[3, 1.9], [6, 4.6]];
-const userClicks = []; // [i, tempoReal]
+const userClicks = []; // [i, realTime]
 stage.addEventListener('pointerdown', e => {
   let best = -1, bd = 1e9; icons.forEach((o, i) => { const r = o.d.getBoundingClientRect(), cxm = r.left + r.width / 2; const d = Math.abs(e.clientX - cxm); if (e.clientY > r.top - 10 && d < r.width / 2 && d < bd) { bd = d; best = i; } });
   if (best >= 0) userClicks.push([best, performance.now()]);
 });
 
-// ---- simulação de molas por ícone ----
+// ---- per-icon spring simulation ----
 const sc = new Float32Array(N), sv = new Float32Array(N);
 function step(t, live, dt) {
   const [cx, cy] = cursorAt(t, live);
-  const vf = clamp(1 - Math.max(0, 1050 - 130 - cy) / 260);   // perto do dock => magnificação plena
+  const vf = clamp(1 - Math.max(0, 1050 - 130 - cy) / 260);   // near the dock => full magnification
   for (let i = 0; i < N; i++) {
     const dx = restX(i) - cx, target = 1 + AMP * vf * Math.exp(-(dx * dx) / (SIG * SIG));
     const a = 520 * (target - sc[i]) - 30 * sv[i];
@@ -106,7 +106,7 @@ function render(t, live) {
   else { sc.fill(1); sv.fill(0); for (let q = t - D; q < t; q += dt) step(((q % D) + D) % D, false, dt); }
   primed = live;
 
-  // layout: soma das larguras escaladas, centrado
+  // layout: sum of the scaled widths, centered
   const wd = sc.map(s => BASE * s); let total = 0; for (const w of wd) total += w; total += GAP * (N - 1);
   let x = CX - total / 2, best = 0, bs = 0;
   dock.style.left = (CX - total / 2 - PAD) + 'px'; dock.style.width = (total + 2 * PAD) + 'px';
@@ -120,11 +120,11 @@ function render(t, live) {
     if (sc[i] > bs) { bs = sc[i]; best = i; }
     o._cx = x + w / 2; o._top = H - 34 - 17 - w - b; x += w + GAP;
   });
-  // rótulo do app sob o cursor
+  // app label under the cursor
   const o = icons[best];
   lab.textContent = o.name; lab.style.opacity = clamp((bs - 1.35) * 2.2);
   lab.style.left = (o._cx - lab.offsetWidth / 2) + 'px'; lab.style.top = (o._top - 64) + 'px';
-  // cursor virtual
+  // virtual cursor
   const [cx, cy] = cursorAt(t, live); const real = isReal(live);
   cur.style.opacity = real ? 0 : 1; cur.style.transform = `translate(${cx}px,${cy}px)`;
   document.getElementById('tc').textContent = t.toFixed(2) + 's';

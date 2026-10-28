@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Áudio · VU meters digitais</title>
+<title>Portfolio Audio · Digital VU meters</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -21,8 +21,8 @@
 <body>
 <div id="stage">
   <canvas id="cv" width="1920" height="1080"></canvas>
-  <div id="title"><b>Level Meters</b><span>VU analógico + LED digital · pico com hold · <i id="mode" style="font-style:normal">demo sintético</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
-  <button id="btn">▶ Ativar áudio ao vivo</button>
+  <div id="title"><b>Level Meters</b><span>Analog VU + digital LED · peak hold · <i id="mode" style="font-style:normal">synthetic demo</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <button id="btn">▶ Enable live audio</button>
 </div>
 
 <script>
@@ -32,10 +32,10 @@ const tcEl = document.getElementById('tc'), modeEl = document.getElementById('mo
 function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit();
 
-// ===== Motor de áudio procedural (Web Audio) + modelos sintéticos determinísticos =====
-// Sem arquivos externos: bateria, baixo e analisadores nascem de osciladores/ruído.
-// Modo "demo": curvas sintéticas puras de t (loop de 8 s, funcionam com seek).
-// Modo "ao vivo": após um clique do usuário, AnalyserNodes reais alimentam as visualizações.
+// ===== Procedural audio engine (Web Audio) + deterministic synthetic models =====
+// No external files: drums, bass and analyzers come from oscillators/noise.
+// "demo" mode: pure synthetic curves of t (8 s loop, works with seek).
+// "live" mode: after a user click, real AnalyserNodes drive the visuals.
 const Engine = (() => {
   let ac, bus, master, an, anL, anR, started = false, timer = null, nextT = 0, step = 0, noiseBuf, pattern = null, eq = [];
   const edges = Array.from({ length: 65 }, (_, i) => 40 * Math.pow(16000 / 40, i / 64));
@@ -84,7 +84,7 @@ const Engine = (() => {
       noiseBuf = noise(); started = true; ac.resume(); nextT = ac.currentTime + .08; step = 0; timer = setInterval(sched, 25);
     },
     stop() { if (!started) return; clearInterval(timer); ac.suspend(); started = false; ac.close(); },
-    // 64 bandas logarítmicas (40 Hz–16 kHz), valores 0..1
+    // 64 log-spaced bands (40 Hz–16 kHz), values 0..1
     spectrum(outArr) {
       if (!started) return false;
       const u = new Uint8Array(an.frequencyBinCount), nyq = ac.sampleRate / 2, n = u.length; an.getByteFrequencyData(u);
@@ -100,7 +100,7 @@ const Engine = (() => {
   };
 })();
 
-// Modelos sintéticos puros de t (120 BPM; período de 8 s => loop perfeito)
+// Pure synthetic models of t (120 BPM; 8 s period => perfect loop)
 function synthSpec(t, outArr) {
   const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
   const kick = Math.exp(-bf * 7) * (bi % 4 === 0 ? 1 : .9), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
@@ -124,11 +124,11 @@ function synthLevels(t) {
 
 let live = false;
 btn.onclick = () => {
-  if (!live) { Engine.start(); live = true; btn.textContent = '■ Voltar ao demo'; btn.classList.add('on'); modeEl.textContent = 'áudio ao vivo (Web Audio)'; resetState(); }
-  else { Engine.stop(); live = false; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); modeEl.textContent = 'demo sintético'; }
+  if (!live) { Engine.start(); live = true; btn.textContent = '■ Back to demo'; btn.classList.add('on'); modeEl.textContent = 'live audio (Web Audio)'; resetState(); }
+  else { Engine.stop(); live = false; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); modeEl.textContent = 'synthetic demo'; }
 };
 
-// ---- estado dos medidores (física: mola amortecida na agulha, hold + queda no pico) ----
+// ---- meter state (physics: damped spring on the needle, hold + fall on the peak) ----
 const ch = [0, 1].map(() => ({ x: 0, v: 0, db: -90, pk: -90, pkT: 0, vpk: 0, vpkT: 0 }));
 function resetState() { ch.forEach(c => { c.x = 0; c.v = 0; c.db = -90; c.pk = -90; c.pkT = 0; c.vpk = 0; c.vpkT = 0; }); }
 const toDb = a => 20 * Math.log10(Math.max(a, 1e-5));
@@ -136,12 +136,12 @@ function step(t, lv, dt) {
   const w = TAU * 2.6, z = .78;
   lv.forEach((a, i) => {
     const c = ch[i];
-    // VU: 0 VU = RMS 0.30; faixa -20..+3
+    // VU: 0 VU = RMS 0.30; range -20..+3
     const vu = toDb(a / .30), target = Math.max(0, Math.min(1.08, (vu + 20) / 23));
     const acc = w * w * (target - c.x) - 2 * z * w * c.v;
     c.v += acc * dt; c.x += c.v * dt;
     if (c.x > c.vpk) { c.vpk = c.x; c.vpkT = t; } else if (t - c.vpkT > .6 || t < c.vpkT) c.vpk = Math.max(c.x, c.vpk - .55 * dt);
-    // LED digital: ataque instantâneo, release 22 dB/s; pico de amostra ≈ RMS × 1.7
+    // digital LED: instant attack, 22 dB/s release; sample peak ≈ RMS × 1.7
     const db = Math.min(-.1, toDb(a * 1.3));
     c.db = db > c.db ? db : Math.max(db, c.db - 22 * dt);
     if (c.db > c.pk) { c.pk = c.db; c.pkT = t; } else if (t - c.pkT > 1.0 || t < c.pkT) c.pk = Math.max(c.db, c.pk - 14 * dt);
@@ -152,17 +152,17 @@ function advance(t, liveLoop) {
   const dt = 1 / 120;
   if (live && Engine.started) { const lv = Engine.levels(); if (lv) step(t, lv, 1 / 60); return; }
   resetState();
-  for (let q = t - D; q < t; q += dt) step(q, synthLevels(((q % D) + D) % D), dt);   // aquece 1 loop completo e simula até t
+  for (let q = t - D; q < t; q += dt) step(q, synthLevels(((q % D) + D) % D), dt);   // warm up one full loop and simulate up to t
 }
 
-// ---- desenho ----
+// ---- drawing ----
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 function vuMeter(cx, cy, c, label, col) {
   const R = 330, a0 = -Math.PI / 2 - 0.95, a1 = -Math.PI / 2 + 0.95, ang = p => a0 + (a1 - a0) * p;
-  // painel
+  // panel
   ctx.fillStyle = 'rgba(8,16,24,.85)'; ctx.strokeStyle = 'rgba(120,200,220,.2)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.roundRect(cx - 350, cy - 330, 700, 470, 34); ctx.fill(); ctx.stroke();
-  // arco de segmentos
+  // segment arc
   const segs = 46;
   for (let i = 0; i < segs; i++) {
     const p0 = i / segs, p1 = (i + .72) / segs, on = c.x * 1.0 >= (i + .5) / segs;
@@ -171,7 +171,7 @@ function vuMeter(cx, cy, c, label, col) {
     if (on) { ctx.shadowColor = color; ctx.shadowBlur = 20; }
     ctx.beginPath(); ctx.arc(cx, cy, R, ang(p0), ang(p1)); ctx.stroke(); ctx.restore();
   }
-  // escala
+  // scale
   ctx.font = '600 24px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const v of [-20, -10, -7, -5, -3, 0, 3]) {
     const p = (v + 20) / 23, a = ang(p), r1 = R - 24, r2 = R - 44, r3 = R - 78;
@@ -181,11 +181,11 @@ function vuMeter(cx, cy, c, label, col) {
   }
   ctx.font = '800 54px Inter, sans-serif'; ctx.fillStyle = col; ctx.fillText('VU', cx, cy - 120);
   ctx.font = '700 28px Inter, sans-serif'; ctx.fillStyle = 'rgba(200,225,235,.7)'; ctx.fillText(label, cx, cy - 76);
-  // marcador de pico (hold)
+  // peak marker (hold)
   const pa = ang(clamp(c.vpk, 0, 1.08));
   ctx.save(); ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 16;
   ctx.beginPath(); ctx.arc(cx + Math.cos(pa) * (R + 30), cy + Math.sin(pa) * (R + 30), 7, 0, TAU); ctx.fill(); ctx.restore();
-  // agulha com glow
+  // needle with glow
   const na = ang(clamp(c.x, -.02, 1.1));
   ctx.save(); ctx.lineCap = 'round';
   for (const [w, a, b] of [[16, .12, 28], [9, .3, 14], [4, 1, 0]]) {
@@ -213,7 +213,7 @@ function render(t, liveLoop) {
   ctx.clearRect(0, 0, W, H);
   vuMeter(440, 640, ch[0], 'LEFT', '#22d3ee');
   vuMeter(1150, 640, ch[1], 'RIGHT', '#f0abfc');
-  // escala dBFS entre as barras
+  // dBFS scale between the bars
   const bx1 = 1650, bx2 = 1760, by = 250, bh = 640;
   ctx.fillStyle = 'rgba(8,16,24,.85)'; ctx.strokeStyle = 'rgba(120,200,220,.2)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.roundRect(1570, 170, 300, 800, 34); ctx.fill(); ctx.stroke();
@@ -225,7 +225,7 @@ function render(t, liveLoop) {
 }
 let manual = false, start = performance.now();
 window.DURATION = D;
-window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'demo sintético'; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
+window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'synthetic demo'; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
 window.resume = () => { manual = false; start = performance.now(); };
 (function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
 window.__ready = true;

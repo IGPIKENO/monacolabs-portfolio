@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Áudio · EQ paramétrico</title>
+<title>Portfolio Audio · Parametric EQ</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -21,8 +21,8 @@
 <body>
 <div id="stage">
   <canvas id="cv" width="1920" height="1080"></canvas>
-  <div id="title"><b>Parametric EQ</b><span>5 bandas · arraste os pontos · roda do mouse = Q · <i id="mode" style="font-style:normal">demo sintético</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
-  <button id="btn">▶ Ativar áudio ao vivo</button>
+  <div id="title"><b>Parametric EQ</b><span>5 bands · drag the nodes · mouse wheel = Q · <i id="mode" style="font-style:normal">synthetic demo</i> · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <button id="btn">▶ Enable live audio</button>
 </div>
 
 <script>
@@ -32,10 +32,10 @@ const tcEl = document.getElementById('tc'), modeEl = document.getElementById('mo
 function fit() { const s = Math.min(innerWidth / W, innerHeight / H); stage.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener('resize', fit); fit();
 
-// ===== Motor de áudio procedural (Web Audio) + modelos sintéticos determinísticos =====
-// Sem arquivos externos: bateria, baixo e analisadores nascem de osciladores/ruído.
-// Modo "demo": curvas sintéticas puras de t (loop de 8 s, funcionam com seek).
-// Modo "ao vivo": após um clique do usuário, AnalyserNodes reais alimentam as visualizações.
+// ===== Procedural audio engine (Web Audio) + deterministic synthetic models =====
+// No external files: drums, bass and analyzers come from oscillators/noise.
+// "demo" mode: pure synthetic curves of t (8 s loop, works with seek).
+// "live" mode: after a user click, real AnalyserNodes drive the visuals.
 const Engine = (() => {
   let ac, bus, master, an, anL, anR, started = false, timer = null, nextT = 0, step = 0, noiseBuf, pattern = null, eq = [];
   const edges = Array.from({ length: 65 }, (_, i) => 40 * Math.pow(16000 / 40, i / 64));
@@ -84,7 +84,7 @@ const Engine = (() => {
       noiseBuf = noise(); started = true; ac.resume(); nextT = ac.currentTime + .08; step = 0; timer = setInterval(sched, 25);
     },
     stop() { if (!started) return; clearInterval(timer); ac.suspend(); started = false; ac.close(); },
-    // 64 bandas logarítmicas (40 Hz–16 kHz), valores 0..1
+    // 64 log-spaced bands (40 Hz–16 kHz), values 0..1
     spectrum(outArr) {
       if (!started) return false;
       const u = new Uint8Array(an.frequencyBinCount), nyq = ac.sampleRate / 2, n = u.length; an.getByteFrequencyData(u);
@@ -100,7 +100,7 @@ const Engine = (() => {
   };
 })();
 
-// Modelos sintéticos puros de t (120 BPM; período de 8 s => loop perfeito)
+// Pure synthetic models of t (120 BPM; 8 s period => perfect loop)
 function synthSpec(t, outArr) {
   const beat = t * 2, bi = Math.floor(beat), bf = beat - bi;
   const kick = Math.exp(-bf * 7) * (bi % 4 === 0 ? 1 : .9), sn = (bi % 2 === 1) ? Math.exp(-bf * 9) : 0, hat = Math.exp(-((t * 4) % 1) * 13);
@@ -124,11 +124,11 @@ function synthLevels(t) {
 
 let live = false;
 btn.onclick = () => {
-  if (!live) { Engine.start(); live = true; btn.textContent = '■ Voltar ao demo'; btn.classList.add('on'); modeEl.textContent = 'áudio ao vivo (Web Audio)'; eqTypes(); }
-  else { Engine.stop(); live = false; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); modeEl.textContent = 'demo sintético'; }
+  if (!live) { Engine.start(); live = true; btn.textContent = '■ Back to demo'; btn.classList.add('on'); modeEl.textContent = 'live audio (Web Audio)'; eqTypes(); }
+  else { Engine.stop(); live = false; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); modeEl.textContent = 'synthetic demo'; }
 };
 
-// ---- bandas do EQ ----
+// ---- EQ bands ----
 const bands = [
   { type: 'lowshelf',  f: 80,    g: 4,  q: .7,  c: '#38bdf8' },
   { type: 'peaking',   f: 250,   g: -3, q: 1.1, c: '#34d399' },
@@ -140,7 +140,7 @@ const base = bands.map(b => ({ ...b }));
 let touched = false;
 function eqTypes() { Engine.eq.forEach((f, i) => { f.type = bands[i].type; }); }
 
-// resposta em frequência (biquad RBJ analítico, igual ao do Web Audio)
+// frequency response (analytic RBJ biquad, same as Web Audio's)
 function coeffs(b, fs = 48000) {
   const A = Math.pow(10, b.g / 40), w0 = TAU * b.f / fs, cs = Math.cos(w0), sn = Math.sin(w0);
   if (b.type === 'peaking') {
@@ -161,7 +161,7 @@ function magDb(c, f, fs = 48000) {
   return 10 * Math.log10(n / d);
 }
 
-// ---- layout do gráfico ----
+// ---- chart layout ----
 const X0 = 220, X1 = 1760, Y0 = 250, Y1 = 790, FMIN = 20, FMAX = 20000, DB = 18;
 const fx = f => X0 + (Math.log10(f) - Math.log10(FMIN)) / (Math.log10(FMAX) - Math.log10(FMIN)) * (X1 - X0);
 const xf = x => Math.pow(10, Math.log10(FMIN) + (x - X0) / (X1 - X0) * (Math.log10(FMAX) - Math.log10(FMIN)));
@@ -169,7 +169,7 @@ const gy = g => Y0 + (DB - g) / (2 * DB) * (Y1 - Y0);
 const yg = y => DB - (y - Y0) / (Y1 - Y0) * 2 * DB;
 const bandX = b => fx(40 * Math.pow(16000 / 40, (b + .5) / 64));
 
-// ---- interação ----
+// ---- interaction ----
 let drag = -1;
 const toStage = e => { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
 cv.addEventListener('pointerdown', e => {
@@ -188,7 +188,7 @@ cv.addEventListener('wheel', e => {
   if (best >= 0) { touched = true; const b = bands[best]; b.q = Math.min(8, Math.max(.3, b.q * (e.deltaY < 0 ? 1.12 : .89))); }
 }, { passive: false });
 
-function demoBands(t) {   // sem interação: nós oscilam em loop de 8 s (frequências inteiras)
+function demoBands(t) {   // without interaction: nodes oscillate in an 8 s loop (integer frequencies)
   const ph = TAU * t / D;
   bands.forEach((b, i) => {
     b.f = base[i].f * Math.pow(2, .7 * Math.sin(ph * (1 + i % 2) + i));
@@ -206,10 +206,10 @@ function render(t, liveLoop) {
   for (let k = 0; k < pts; k++) { const f = FMIN * Math.pow(FMAX / FMIN, k / (pts - 1)); fr[k] = f; let s = 0; for (const c of cf) s += magDb(c, f); resp[k] = s; }
 
   ctx.clearRect(0, 0, W, H);
-  // painel
+  // panel
   ctx.fillStyle = 'rgba(12,18,40,.6)'; ctx.strokeStyle = 'rgba(140,170,255,.18)'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.roundRect(X0 - 80, Y0 - 50, X1 - X0 + 160, Y1 - Y0 + 120, 28); ctx.fill(); ctx.stroke();
-  // grade
+  // grid
   ctx.font = '500 22px Inter, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (const g of [-18, -12, -6, 0, 6, 12, 18]) {
     ctx.strokeStyle = g === 0 ? 'rgba(160,190,255,.45)' : 'rgba(140,170,255,.12)'; ctx.lineWidth = g === 0 ? 2 : 1;
@@ -221,7 +221,7 @@ function render(t, liveLoop) {
     ctx.strokeStyle = 'rgba(140,170,255,.10)'; ctx.beginPath(); ctx.moveTo(fx(f), Y0); ctx.lineTo(fx(f), Y1); ctx.stroke();
     ctx.fillStyle = 'rgba(170,190,235,.7)'; ctx.fillText(f >= 1000 ? (f / 1000) + 'k' : f, fx(f), Y1 + 14);
   }
-  // espectro (pós-EQ) de fundo
+  // background spectrum (post-EQ)
   if (live && Engine.started) Engine.spectrum(spec); else synthSpec(t, spec);
   const mid = (Y0 + Y1) / 2;
   const sg = ctx.createLinearGradient(0, Y1, 0, Y0); sg.addColorStop(0, 'rgba(56,189,248,.05)'); sg.addColorStop(1, 'rgba(167,139,250,.45)');
@@ -232,14 +232,14 @@ function render(t, liveLoop) {
     ctx.lineTo(bandX(b), Y1 - Math.min(1.2, v) * (Y1 - Y0) * .62);
   }
   ctx.lineTo(bandX(63), Y1); ctx.closePath(); ctx.fillStyle = sg; ctx.fill();
-  // curva do EQ (glow)
+  // EQ curve (glow)
   const lg = ctx.createLinearGradient(X0, 0, X1, 0); lg.addColorStop(0, '#38bdf8'); lg.addColorStop(.5, '#f0abfc'); lg.addColorStop(1, '#a78bfa');
   ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   for (const [w, a, blur] of [[14, .18, 22], [8, .35, 10], [4, 1, 0]]) {
     ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = lg; ctx.lineWidth = w; if (blur) { ctx.shadowColor = '#c084fc'; ctx.shadowBlur = blur; }
     ctx.beginPath(); for (let k = 0; k < pts; k++) { const x = fx(fr[k]), y = gy(Math.max(-DB, Math.min(DB, resp[k]))); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.restore();
   }
-  // nós
+  // nodes
   bands.forEach((b, i) => {
     const x = fx(b.f), y = gy(b.g);
     ctx.save(); ctx.shadowColor = b.c; ctx.shadowBlur = i === drag ? 40 : 24; ctx.fillStyle = b.c;
@@ -247,7 +247,7 @@ function render(t, liveLoop) {
     ctx.fillStyle = '#05070f'; ctx.font = '700 18px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(i + 1, x, y + 1);
     ctx.strokeStyle = b.c; ctx.globalAlpha = .35; ctx.setLineDash([6, 8]); ctx.beginPath(); ctx.moveTo(x, y + 22); ctx.lineTo(x, Y1); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
   });
-  // cartões das bandas
+  // band cards
   const cw = 292, gap = 20, cx0 = (W - (5 * cw + 4 * gap)) / 2;
   bands.forEach((b, i) => {
     const x = cx0 + i * (cw + gap), y = 880;
@@ -266,7 +266,7 @@ function render(t, liveLoop) {
 
 let manual = false, start = performance.now();
 window.DURATION = D;
-window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'demo sintético'; btn.textContent = '▶ Ativar áudio ao vivo'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
+window.seek = s => { manual = true; if (live) { live = false; Engine.stop(); modeEl.textContent = 'synthetic demo'; btn.textContent = '▶ Enable live audio'; btn.classList.remove('on'); } render(((s % D) + D) % D, false); };
 window.resume = () => { manual = false; start = performance.now(); };
 (function loop() { if (!manual) render(((performance.now() - start) / 1000) % D, true); requestAnimationFrame(loop); })();
 if (document.fonts) document.fonts.ready.then(() => {});

@@ -49,7 +49,7 @@
   #heroV{position:relative;aspect-ratio:16/10;border-radius:30px;overflow:hidden;border:1px solid var(--line);background:linear-gradient(145deg,#141a3c,#0a0d1f);box-shadow:0 40px 100px rgba(80,70,255,.25);transition:transform .15s ease-out;transform-style:preserve-3d;will-change:transform}
   #heroV video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   #heroV .tag{position:absolute;left:18px;bottom:18px;padding:8px 16px;border-radius:999px;background:rgba(5,6,13,.65);backdrop-filter:blur(8px);border:1px solid var(--line);font-size:14px}
-  /* seções */
+  /* sections */
   section{padding:90px 0}
   .eyebrow{font:600 14px 'Space Grotesk',sans-serif;letter-spacing:.3em;color:var(--acc2);text-transform:uppercase}
   h2{font-size:clamp(32px,4vw,56px);margin:14px 0 14px}
@@ -224,14 +224,13 @@
 </div>
 
 <script>
-/* ===== CONFIGURAÇÃO — troque pelos seus dados reais =====
-   Os links abaixo são páginas iniciais genéricas até você colocar seus perfis. */
+/* ===== CONFIG — replace with your real details ===== */
 const CONFIG = {
-  contra:   'https://contra.com/igor_pequeno_5cd2xcut',   // perfil na Contra
-  linkedin: 'https://www.linkedin.com/',      // ex.: https://www.linkedin.com/in/seu-perfil
-  github:   'https://github.com/IGPIKENO',      // perfil do GitHub
-  email:    'monacolabss@gmail.com',          // e-mail de contato (aparece no código da página)
-  formUrl:  'https://monacolabs.netlify.app/' // o formulário envia para o Netlify Forms deste site (as mensagens chegam no painel do Netlify e, se ativado, por e-mail)
+  contra:   'https://contra.com/igor_pequeno_5cd2xcut',   // Contra profile
+  linkedin: 'https://www.linkedin.com/',      // e.g. https://www.linkedin.com/in/your-profile
+  github:   'https://github.com/IGPIKENO',      // GitHub profile
+  email:    'monacolabss@gmail.com',          // contact email (visible in the page source)
+  formUrl:  'https://monacolabs.netlify.app/' // the form posts to this site's Netlify Forms (messages appear in the Netlify dashboard and, if enabled, by email)
 };
 
 const CATS = [['all', 'All'], ['3d', '3D & WebGL'], ['audio', 'Audio Engineering & DSP'], ['ui', 'UI Motion & Micro-interactions'], ['data', 'Data Viz & AI Systems']];
@@ -260,11 +259,11 @@ $('#yr').textContent = new Date().getFullYear();
 $('#heroContra').href = $('#lnContra').href = CONFIG.contra; $('#lnLinkedin').href = CONFIG.linkedin; $('#lnGithub').href = CONFIG.github;
 $('#lnEmail').href = 'mailto:' + CONFIG.email; $('#lnEmailTx').textContent = CONFIG.email;
 
-/* ---------- navegação mobile ---------- */
+/* ---------- mobile navigation ---------- */
 $('#burger').onclick = () => { const o = $('#links').classList.toggle('open'); $('#burger').setAttribute('aria-expanded', o); };
 $$('#links a').forEach(a => a.addEventListener('click', () => { $('#links').classList.remove('open'); $('#burger').setAttribute('aria-expanded', false); }));
 
-/* ---------- grade de projetos ---------- */
+/* ---------- project grid ---------- */
 const grid = $('#grid'), tabs = $('#tabs');
 CATS.forEach(([k, name], i) => {
   const b = document.createElement('button'); b.role = 'tab'; b.dataset.f = k; b.setAttribute('aria-selected', i === 0);
@@ -280,7 +279,7 @@ P.forEach(p => {
       <div class="acts"><button class="btn pri" data-demo="${p.n}">Live demo</button><a class="btn" href="exports/${p.out}.mp4" download>MP4 ↓</a></div></div>`;
   grid.appendChild(c); p.el = c;
 });
-// vídeos: carrega só perto da tela; toca no hover/foco (em telas de toque, quando visível)
+// videos: load only near the viewport; play on hover/focus (on touch screens, when visible)
 const touch = matchMedia('(hover: none)').matches, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const io = new IntersectionObserver(es => es.forEach(e => {
   const v = e.target.querySelector('video');
@@ -307,7 +306,7 @@ tabs.addEventListener('click', e => {
   });
 });
 
-/* ---------- modal com iframe ---------- */
+/* ---------- modal with iframe ---------- */
 const modal = $('#modal'), frame = $('#mframe'); let cur = 0, lastFocus = null;
 function openDemo(p) {
   cur = P.indexOf(p); lastFocus = document.activeElement;
@@ -321,7 +320,7 @@ modal.addEventListener('click', e => { if (e.target === modal || e.target.classL
 addEventListener('keydown', e => { if (!modal.classList.contains('on')) return; if (e.key === 'Escape') closeDemo(); if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1); });
 grid.addEventListener('click', e => { const b = e.target.closest('[data-demo]'); if (b) openDemo(P[+b.dataset.demo - 1]); });
 
-/* ---------- serviços e pacotes (preços de referência; edite à vontade) ---------- */
+/* ---------- services and packages (reference prices; edit freely) ---------- */
 const PK = [
   ['Launch', 'Single effect or UI piece', { usd: 1400, eur: 1290 }, ['1 interactive HTML demo', '1080p / 60fps MP4 loop', 'Source files', '1 revision round'], 0],
   ['Studio', '3D hero section', { usd: 2450, eur: 2250 }, ['Custom 3D hero (Three.js / GLSL)', 'Mouse interaction & physics', 'Performance pass to 60fps', 'MP4 exports for social', '2 revision rounds'], 1],
@@ -343,7 +342,7 @@ function renderOffers() {
 $$('.cur button').forEach(b => b.onclick = () => { currency = b.dataset.cur; $$('.cur button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderOffers(); });
 renderOffers();
 
-/* ---------- formulário com validação visual ---------- */
+/* ---------- form with visual validation ---------- */
 const form = $('#form'), rules = {
   name: v => v.trim().length >= 2, email: v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()),
   type: v => !!v, budget: v => !!v, message: v => v.trim().length >= 20
@@ -374,7 +373,7 @@ form.addEventListener('submit', async e => {
   } finally { btn.disabled = false; btn.textContent = label; }
 });
 
-/* ---------- fundo: partículas com profundidade que reagem ao cursor ---------- */
+/* ---------- background: depth particles that react to the cursor ---------- */
 (() => {
   const cv = $('#bg'), ctx = cv.getContext('2d'); let W, H, dpr, pts = [], mx = -999, my = -999, tick = 0, run = true;
   function size() { dpr = Math.min(devicePixelRatio || 1, 1.5); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -402,7 +401,7 @@ form.addEventListener('submit', async e => {
   if (reduce) { ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, H); frame(); } else loop();
 })();
 
-/* ---------- preview do herói: inclinação 3D com o mouse ---------- */
+/* ---------- hero preview: 3D tilt with the mouse ---------- */
 (() => {
   const el = $('#heroV');
   if (reduce) { const hv0 = $('#heroVid'); hv0.removeAttribute('autoplay'); hv0.pause(); el.addEventListener('pointerenter', () => hv0.play().catch(() => {})); el.addEventListener('pointerleave', () => hv0.pause()); return; }

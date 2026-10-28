@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio Dataviz · Candlesticks com execução de ordens</title>
+<title>Portfolio Dataviz · Candlesticks with order execution</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#02030a;overflow:hidden}
@@ -24,13 +24,13 @@ const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x)), lerp = (a, b, x)
 const smooth = (a, b, x) => { x = clamp((x - a) / (b - a)); return x * x * (3 - 2 * x); };
 const UP = '#2dd4bf', DN = '#fb7185';
 
-// ---- dados SINTÉTICOS (gerador com semente; não são dados de mercado) ----
+// ---- SYNTHETIC data (seeded generator; not market data) ----
 const NC = 72;
 let seed = 20261027; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
 const randn = () => { let u = 0; for (let i = 0; i < 6; i++) u += rnd(); return (u - 3) / .7071; };
 const C = []; { let p = 100; for (let i = 0; i < NC; i++) { const o = p, c = o + randn() * 1.5 + Math.sin(i / 7) * .55 + .08, h = Math.max(o, c) + Math.abs(randn()) * .8, l = Math.min(o, c) - Math.abs(randn()) * .8, v = 40 + Math.abs(randn()) * 55 + Math.abs(c - o) * 22; C.push({ o, c, h, l, v }); p = c; } }
 const sma = i => { if (i < 19) return null; let s = 0; for (let k = i - 19; k <= i; k++) s += C[k].c; return s / 20; };
-// ordens de demonstração em pontos plausíveis: compra no fundo, venda no topo seguinte, nova compra
+// demo orders at plausible points: buy the low, sell the next high, buy again
 const pick = (from, to, fn) => { let best = from; for (let i = from; i <= to; i++) if (fn(C[i].c, C[best].c)) best = i; return best; };
 const iB1 = pick(12, 34, (a, b) => a < b), iS = pick(iB1 + 8, 62, (a, b) => a > b), iB2 = pick(Math.min(NC - 4, iS + 3), NC - 3, (a, b) => a < b);
 const orders = [{ i: iB1, side: 'BUY' }, { i: iS, side: 'SELL' }, { i: iB2, side: 'BUY' }].map(o => ({ ...o, px: C[o.i].c }));
@@ -53,17 +53,17 @@ function render(t) {
   ctx.globalAlpha = fin;
   const rc = reveal(t), full = Math.floor(rc), frac = rc - full;
   const last = Math.min(NC - 1, full - (frac === 0 ? 1 : 0));
-  // cabeçalho
+  // header
   const lc = last >= 0 ? (full < NC ? lerp(C[full].o, C[full].c, frac) : C[NC - 1].c) : C[0].o;
   const first = C[0].o, chg = (lc / first - 1) * 100;
   ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
   ctx.fillStyle = '#fff'; ctx.font = '800 54px Inter, sans-serif'; ctx.fillText('SIM / USD', 110, 110);
-  ctx.fillStyle = '#7f8fbd'; ctx.font = '500 26px Inter, sans-serif'; ctx.fillText('15m · estratégia de demonstração', 110, 152);
+  ctx.fillStyle = '#7f8fbd'; ctx.font = '500 26px Inter, sans-serif'; ctx.fillText('15m · demo strategy', 110, 152);
   ctx.fillStyle = '#fff'; ctx.font = '800 76px Inter, sans-serif'; ctx.fillText(lc.toFixed(2), 700, 118);
   ctx.fillStyle = chg >= 0 ? UP : DN; ctx.font = '700 32px Inter, sans-serif'; ctx.fillText((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%', 960, 116);
   ctx.fillStyle = 'rgba(251,191,36,.16)'; ctx.strokeStyle = 'rgba(251,191,36,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(1380, 76, 310, 56, 28); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#fbbf24'; ctx.font = '700 22px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('DADOS SIMULADOS', 1535, 112);
-  // grade e eixos
+  ctx.fillStyle = '#fbbf24'; ctx.font = '700 22px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('SIMULATED DATA', 1535, 112);
+  // grid and axes
   ctx.textAlign = 'left'; ctx.font = '500 21px ui-monospace, Consolas, monospace'; ctx.lineWidth = 1;
   for (let k = 0; k <= 5; k++) { const p = lo + (hi - lo) * k / 5, y = py(p); ctx.strokeStyle = 'rgba(140,165,230,.10)'; ctx.beginPath(); ctx.moveTo(X0, y); ctx.lineTo(X1, y); ctx.stroke(); ctx.fillStyle = '#8da0cf'; ctx.fillText(p.toFixed(1), X1 + 18, y + 7); }
   ctx.textAlign = 'center'; for (let k = 0; k < NC; k += 12) { ctx.fillStyle = '#6f80ad'; ctx.fillText(String(9 + Math.floor(k / 4)).padStart(2, '0') + ':' + String((k % 4) * 15).padStart(2, '0'), cx(k), 972); }
@@ -77,22 +77,22 @@ function render(t) {
     const y1 = py(Math.max(c.o, close)), y2 = py(Math.min(c.o, close));
     ctx.fillStyle = col; ctx.fillRect(x - cw * .36, y1, cw * .72, Math.max(3, y2 - y1));
   }
-  // média móvel
+  // moving average
   ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 3.5; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 12; ctx.beginPath(); let started = false;
   for (let i = 19; i < Math.min(NC, full); i++) { const m = sma(i); started ? ctx.lineTo(cx(i), py(m)) : ctx.moveTo(cx(i), py(m)); started = true; }
   ctx.stroke(); ctx.shadowBlur = 0;
-  // ordens
+  // orders
   let toastY = 800;
   orders.forEach((o, k) => {
     if (full <= o.i) return;
     const tm = t - revealT[o.i], buy = o.side === 'BUY', col = buy ? UP : DN, x = cx(o.i), y = py(o.px) + (buy ? 46 : -46);
     const pop = clamp(tm / .35), ring = clamp(tm / 1.0);
-    // marcador
+    // marker
     ctx.save(); ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 24; ctx.globalAlpha = fin * pop;
     ctx.beginPath(); if (buy) { ctx.moveTo(x, y - 18 * pop); ctx.lineTo(x - 15, y + 12); ctx.lineTo(x + 15, y + 12); } else { ctx.moveTo(x, y + 18 * pop); ctx.lineTo(x - 15, y - 12); ctx.lineTo(x + 15, y - 12); }
     ctx.closePath(); ctx.fill(); ctx.restore();
     ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.globalAlpha = fin * (1 - ring) * .8; ctx.beginPath(); ctx.arc(x, py(o.px), 12 + ring * 46, 0, TAU); ctx.stroke(); ctx.globalAlpha = fin;
-    // linha de execução varrendo até o eixo
+    // execution line sweeping to the axis
     const sweep = clamp((tm - .15) / .6);
     ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([10, 8]); ctx.globalAlpha = fin * .7 * (1 - smooth(1.6, 2.4, tm));
     ctx.beginPath(); ctx.moveTo(x, py(o.px)); ctx.lineTo(x + (X1 - x) * sweep, py(o.px)); ctx.stroke(); ctx.restore();
@@ -108,7 +108,7 @@ function render(t) {
       ctx.restore();
     }
   });
-  // crosshair interativo
+  // interactive crosshair
   if (mouse.x > X0 && mouse.x < X1 && mouse.y > PY0 && mouse.y < VY1) {
     const i = clamp(Math.floor((mouse.x - X0) / cw), 0, NC - 1);
     ctx.save(); ctx.strokeStyle = 'rgba(210,225,255,.45)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.globalAlpha = fin;

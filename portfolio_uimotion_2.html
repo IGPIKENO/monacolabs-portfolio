@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio UI Motion · Card de produto 3D</title>
+<title>Portfolio UI Motion · 3D product card</title>
 <script src="vendor/gsap/gsap.min.js"></script>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
@@ -68,21 +68,21 @@
       <div class="l chip" id="c1" style="left:7%;top:8%">ANC</div>
       <div class="l chip" id="c2" style="right:7%;bottom:9%">40h</div>
     </div>
-    <div id="cardinfo"><div class="tag">NOVO</div><h2>Aero One</h2><p>Headphones sem fio com ANC</p>
-      <div class="row"><span class="price">$249</span><span class="btn" id="vd">Ver detalhes →</span></div></div>
+    <div id="cardinfo"><div class="tag">NEW</div><h2>Aero One</h2><p>Wireless ANC headphones</p>
+      <div class="row"><span class="price">$249</span><span class="btn" id="vd">View details →</span></div></div>
     <div id="minfo">
       <div id="x">×</div>
       <h1 class="m">Aero One</h1>
-      <div class="meta m"><span class="price">$249</span><span>★ 4,9 · 2.184 avaliações</span></div>
-      <p class="m">Cancelamento de ruído adaptativo, áudio espacial e 40 horas de bateria em um design que pesa só 250 g.</p>
-      <div class="lbl m">Cor</div>
+      <div class="meta m"><span class="price">$249</span><span>★ 4.9 · 2,184 reviews</span></div>
+      <p class="m">Adaptive noise cancelling, spatial audio and 40 hours of battery in a design that weighs just 250 g.</p>
+      <div class="lbl m">Color</div>
       <div id="sw" class="m"><i style="background:linear-gradient(135deg,#8b5cf6,#4f46e5)"></i><i style="background:linear-gradient(135deg,#fb7185,#f97316)"></i><i style="background:linear-gradient(135deg,#34d399,#22d3ee)"></i></div>
-      <div id="specs" class="m"><div><b>40h</b><small>Bateria</small></div><div><b>−42 dB</b><small>ANC</small></div><div><b>250 g</b><small>Peso</small></div></div>
-      <div class="btn m" id="cta">Adicionar ao carrinho</div>
+      <div id="specs" class="m"><div><b>40h</b><small>Battery</small></div><div><b>−42 dB</b><small>ANC</small></div><div><b>250 g</b><small>Weight</small></div></div>
+      <div class="btn m" id="cta">Add to cart</div>
     </div>
   </div>
   <div id="rip"></div><div id="cur"></div>
-  <div id="hud">Passe o mouse · clique no card · <span id="tc">0.00s</span></div>
+  <div id="hud">Hover · click the card · <span id="tc">0.00s</span></div>
 </div>
 
 <script>
@@ -105,7 +105,7 @@ function paint() {
   const ccx = l + w / 2, ccy = tp + h / 2;
   const tx = clamp((S.cx - ccx) / 340, -1, 1) * (1 - e), ty = clamp((S.cy - ccy) / 380, -1, 1) * (1 - e);
   const over = (S.cx > l && S.cx < l + w && S.cy > tp && S.cy < tp + h) ? 1 : .0;
-  const k = over ? 1 : 0.35;   // fora do card o tilt é suave
+  const k = over ? 1 : 0.35;   // outside the card the tilt is softer
   card.style.transform = `perspective(1500px) translateY(${(1 - S.in) * 60}px) rotateX(${-ty * 9 * k}deg) rotateY(${tx * 13 * k}deg) scale(${.94 + .06 * S.in})`;
   card.style.opacity = S.in * S.out;
   const art = $('#art'); art.style.width = lerp(520, 700, e) + 'px'; art.style.height = lerp(420, 820, e) + 'px';
@@ -114,23 +114,23 @@ function paint() {
   $('.glow').style.transform = `translate(${tx * -24}px,${ty * -24}px)`;
   $('#ph').style.transform = `translate(${tx * -52}px,${ty * -44}px) scale(${1 + .05 * Math.abs(tx)})`;
   $('#c1').style.transform = `translate(${tx * -84}px,${ty * -70}px)`; $('#c2').style.transform = `translate(${tx * -70}px,${ty * -60}px)`;
-  // info do card x modal
+  // card info vs modal
   $('#cardinfo').style.opacity = 1 - clamp(e * 3); $('#cardinfo').style.pointerEvents = e < .3 ? 'auto' : 'none';
   const r = S.reveal, ms = $$('.m');
   $('#minfo').style.opacity = clamp(r * 6); $('#minfo').style.pointerEvents = r > .5 ? 'auto' : 'none';
   ms.forEach((m, i) => { const p = clamp(r * (1 + ms.length * .16) - i * .16); m.style.opacity = p; m.style.transform = `translateY(${(1 - p) * 34}px)`; });
   $('#x').style.opacity = clamp(r * 3);
-  // cor / carrinho
+  // color / cart
   const [a1, a2] = pal(S.col); stage.style.setProperty('--a1', a1); stage.style.setProperty('--a2', a2);
   $$('#sw i').forEach((s, i) => s.classList.toggle('on', Math.round(S.col) === i));
-  const cta = $('#cta'); cta.textContent = S.cart > .5 ? 'Adicionado ✓' : 'Adicionar ao carrinho';
+  const cta = $('#cta'); cta.textContent = S.cart > .5 ? 'Added ✓' : 'Add to cart';
   $('#bd').style.opacity = e * .55;
   // cursor
   const cur = $('#cur'); cur.style.transform = `translate(${S.cx}px,${S.cy}px) scale(${1 - .25 * Math.sin(Math.PI * S.click)})`; cur.style.opacity = S.curv * S.out * clamp(S.in * 3);
   const rip = $('#rip'); rip.style.transform = `translate(${S.cx}px,${S.cy}px) scale(${1 + 2.2 * S.click})`; rip.style.opacity = S.click > 0 && S.click < 1 ? (1 - S.click) * .7 : 0;
 }
 
-// ---- timeline de demonstração (cursor virtual conduz tilt, clique, modal, cor e carrinho) ----
+// ---- demo timeline (virtual cursor drives tilt, click, modal, color and cart) ----
 const tl = gsap.timeline({ paused: true });
 const click = at => tl.fromTo(S, { click: 0 }, { click: 1, duration: .45, ease: 'none', immediateRender: false }, at);
 tl.to(S, { in: 1, duration: .8, ease: 'power3.out' }, .1)
@@ -150,10 +150,10 @@ tl.to(S, { reveal: 0, duration: .35, ease: 'power2.in' }, 7.05)
   .to(S, { expand: 0, duration: .5, ease: 'power3.inOut' }, 7.1)
   .to(S, { out: 0, duration: .35, ease: 'power2.in' }, 7.62)
   .to({}, { duration: .001 }, D - .001);
-// estado inicial do loop (t=0) e final (t=8) coincidem: card invisível, expand 0, cor 0, carrinho 0
+// initial (t=0) and final (t=8) loop states match: card hidden, expand 0, color 0, cart 0
 tl.set(S, { col: 0, cart: 0, cx: 1500, cy: 260 }, D - .0005);
 
-// ---- modo usuário: o ponteiro real assume o controle ----
+// ---- user mode: the real pointer takes over ----
 let user = false;
 const toStage = e => { const r = stage.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
 function takeOver() { if (user) return; user = true; tl.pause(); S.in = 1; S.out = 1; S.curv = 0; gsap.set(S, { out: 1 }); }

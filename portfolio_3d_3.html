@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Portfolio 3D · Campo de partículas néon</title>
+<title>Portfolio 3D · Neon particle field</title>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   html,body{margin:0;height:100%;background:#010208;overflow:hidden}
@@ -21,7 +21,7 @@
 <div id="stage">
   <div id="vig"></div>
   <div id="orb"></div>
-  <div id="title"><b>GRAVITY FIELD</b><span>14.000 partículas · gravidade + vórtice do cursor · <i id="tc" style="font-style:normal">0.00s</i></span></div>
+  <div id="title"><b>GRAVITY FIELD</b><span>14,000 particles · cursor gravity + vortex · <i id="tc" style="font-style:normal">0.00s</i></span></div>
 </div>
 
 <script type="module">
@@ -42,7 +42,7 @@ const cursorAt = (t, live) => (live && performance.now() - ptr.last < 3000) ? [p
 
 const N = 14000;
 const px = new Float32Array(N), py = new Float32Array(N), vx = new Float32Array(N), vy = new Float32Array(N);
-const hx = new Float32Array(N), hy = new Float32Array(N);   // posição "casa" (galáxia em espiral)
+const hx = new Float32Array(N), hy = new Float32Array(N);   // "home" position (spiral galaxy)
 {
   for (let i = 0; i < N; i++) {
     const u = (i + .5) / N, r = Math.sqrt(u) * 780, a = i * 2.399963 + r * 0.006;
@@ -85,7 +85,7 @@ scene.add(new THREE.Points(geo, mat));
 function reset() { for (let i = 0; i < N; i++) { px[i] = W / 2 + hx[i]; py[i] = H / 2 + hy[i]; vx[i] = vy[i] = 0; } }
 function step(t, live, dt) {
   const [cx0, cy0] = cursorAt(t, live), cx = cx0, cy = H - cy0;
-  const a = TAU * t / D * 0.5 * 0 + 0, c = Math.cos(a), s = Math.sin(a);  // rotação das casas desativada (campo estável)
+  const a = TAU * t / D * 0.5 * 0 + 0, c = Math.cos(a), s = Math.sin(a);  // home rotation disabled (stable field)
   const K = 5.5, G = 3.4e7, SW = .55, damp = .975;
   for (let i = 0; i < N; i++) {
     const tx = W / 2 + hx[i] * c - hy[i] * s, ty = H / 2 + hx[i] * s + hy[i] * c;
