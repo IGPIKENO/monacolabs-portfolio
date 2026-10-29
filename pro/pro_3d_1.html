@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mercury Study · Cut the Beads</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>
+#reset{position:fixed;right:28px;top:20px;z-index:7;border:1px solid rgba(20,17,13,.25);background:rgba(239,233,220,.8);color:#14110d;font:600 12px 'Inter',sans-serif;letter-spacing:.12em;text-transform:uppercase;padding:9px 16px;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px)}
+#reset:hover{background:#14110d;color:#efe9dc}
+.sw{position:fixed;right:28px;top:62px;z-index:7;display:flex;gap:6px}
+.sw i{width:14px;height:14px;border-radius:50%;border:1px solid rgba(20,17,13,.25);display:block}
+</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<button id="reset" type="button">Reset</button>
+<div class="sw" id="sw" aria-label="Pantone palette"></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION } from './lib/common.js';
+import { Post } from './lib/post.js';
+
+hud({ eyebrow: 'WebGL · Raymarching · Anodised chrome', title: 'Mercury Study', text: 'Liquid metal beads on bone paper, tinted with the Pantone Colors of the Year, 2026 back to 2015, so every bead pairs with its neighbour. Swipe across any bead to cut it: it splits into two smaller beads, and every cut adds one more. Soft SDF shadows, contact occlusion and mirror reflections, no glow.', tip: 'Swipe across a bead to cut it · R to reset' });
+
+const app = createApp({ label: 'SDF chrome', clear: 0xe6dfd0 });
+const post = new Post(app.renderer, { scale: 0.75, threshold: 1.7, knee: 0.5, bloomTight: 0.16, bloomWide: 0.1, ca: 0.0008, vignette: 0.28, grain: 0.012, exposure: 1.12 });
+
+// ---------- Pantone-based palette, ordered around the hue wheel so neighbours always harmonise ----------
+// Pantone Colors of the Year, 2026 back to 2015 (screen values are Pantone's published sRGB approximations); the ring order follows the hue wheel
+const PAL = [['2020 Classic Blue 19-4052', '#0F4C81'], ['2016 Serenity 15-3919', '#92A8D1'], ['2022 Very Peri 17-3938', '#6667AB'], ['2018 Ultra Violet 18-3838', '#5F4B8B'], ['2023 Viva Magenta 18-1750', '#BB2649'], ['2015 Marsala 18-1438', '#955251'], ['2019 Living Coral 16-1546', '#FF6F61'], ['2025 Mocha Mousse 17-1230', '#A47864'], ['2024 Peach Fuzz 13-1023', '#FFBE98'], ['2021 Illuminating 13-0647', '#F5DF4D'], ['2017 Greenery 15-0343', '#88B04B'], ['2026 Cloud Dancer 11-4201', '#F0EEE9'], ['2016 Rose Quartz 13-1520', '#F7CAC9'], ['2021 Ultimate Gray 17-5104', '#939597']];
+const lin = hex => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };   // THREE.Color converts sRGB hex to linear
+const PALIN = PAL.map(p => lin(p[1]));
+document.getElementById('sw').innerHTML = PAL.map(p => `<i title="Pantone Color of the Year ${p[0]}" style="background:${p[1]}"></i>`).join('');
+
+const MAX = 20;
+const VS = `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
+const FS = /* glsl */`
+precision highp float;
+uniform float uAspect, uTh; uniform vec3 uRo, uTa; uniform float uF; uniform int uN; uniform vec4 uP[${MAX}]; uniform vec3 uC[${MAX}]; uniform vec4 uKnife; uniform float uKnifeA; varying vec2 vUv;
+float smin(float a, float b, float k){ float h = max(k - abs(a - b), 0.) / k; return min(a, b) - h * h * k * .25; }
+float beads(vec3 p){
+  float d = 1e5;
+  for (int i = 0; i < ${MAX}; i++) { if (i >= uN) break; d = smin(d, length(p - uP[i].xyz) - uP[i].w, .22); }
+  return d;
+}
+vec3 beadCol(vec3 p){
+  vec3 c = vec3(0.); float ws = 1e-4;
+  for (int i = 0; i < ${MAX}; i++) { if (i >= uN) break; float w = exp(-max(length(p - uP[i].xyz) - uP[i].w, 0.) * 16.) + 1e-5; c += uC[i] * w; ws += w; }
+  return c / ws;
+}
+float map(vec3 p){ return min(beads(p), p.y); }
+vec3 nrmB(vec3 p){ const vec2 k = vec2(1., -1.); const float e = .0015; return normalize(k.xyy * beads(p + k.xyy * e) + k.yyx * beads(p + k.yyx * e) + k.yxy * beads(p + k.yxy * e) + k.xxx * beads(p + k.xxx * e)); }
+float traceB(vec3 ro, vec3 rd){ float t = .02; for (int i = 0; i < 36; i++) { float d = beads(ro + rd * t); if (d < .002) return t; t += d * .9; if (t > 9. || ro.y + rd.y * t < -.1) break; } return -1.; }
+float shadow(vec3 ro, vec3 rd){ float res = 1., t = .04; for (int i = 0; i < 26; i++) { float h = beads(ro + rd * t); res = min(res, 9. * h / t); t += clamp(h, .02, .45); if (res < .001 || t > 6.) break; } return clamp(res, 0., 1.); }
+float aoB(vec3 p, vec3 n){ float o = 0., s = 1.; for (int i = 0; i < 4; i++) { float h = .03 + .14 * float(i); o += (h - beads(p + n * h)) * s; s *= .8; } return clamp(1. - 1.7 * o, 0., 1.); }
+
+// A colourful studio cyclorama: Peach Fuzz at the horizon, rose quartz through the middle, Serenity overhead, plus white softbox, Classic Blue and Living Coral strips
+vec3 env(vec3 d){
+  float h = clamp(d.y * 1.5 + .1, 0., 1.);
+  vec3 up = mix(vec3(1., .62, .46) * .82, mix(vec3(.84, .55, .58), vec3(.28, .36, .62), smoothstep(.3, 1., h)), smoothstep(0., .4, h));
+  vec3 dn = mix(vec3(.74, .62, .52), vec3(.16, .12, .10), smoothstep(0., -.9, d.y));
+  vec3 c = mix(dn, up, smoothstep(-.06, .06, d.y));
+  c *= 1. - .8 * smoothstep(.0, .35, d.z + .55) * smoothstep(-.1, .3, d.y) * smoothstep(.9, .5, d.y);
+  c += vec3(1., .97, .92) * 6. * smoothstep(.90, .93, dot(d, normalize(vec3(-.35, .85, .30))));
+  c += vec3(.55, .70, 1.) * 4.5 * smoothstep(.05, .02, abs(d.x + .88)) * smoothstep(-.45, -.1, d.y) * smoothstep(.75, .35, d.y);     // Classic Blue strip, left
+  c *= 1. - .92 * smoothstep(.20, .38, d.x) * smoothstep(-.25, .1, d.y) * smoothstep(.95, .6, d.y);
+  c += vec3(1., .26, .18) * 3.2 * smoothstep(.04, .012, abs(d.x - .62)) * smoothstep(-.3, .0, d.y) * smoothstep(.8, .4, d.y);        // Living Coral rim, right
+  return c;
+}
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float vnP(vec2 p, float per){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f);
+  float a = h21(vec2(i.x, mod(i.y, per))), b = h21(vec2(i.x + 1., mod(i.y, per))), c = h21(vec2(i.x, mod(i.y + 1., per))), d = h21(vec2(i.x + 1., mod(i.y + 1., per)));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+float cloudN(vec2 p, float per){ float a = .5, s = 0.; for (int k = 0; k < 4; k++) { s += a * vnP(p, per); p *= 2.; per *= 2.; a *= .5; } return s; }
+// the backdrop the camera sees: the same gradient, glow pools, drifting clouds and faint light shafts
+vec3 backdrop(vec3 d, vec2 uv){
+  float h = clamp(d.y * 1.6 + .1, 0., 1.);
+  vec3 c = mix(vec3(1., .66, .50), vec3(.90, .58, .60), smoothstep(0., .35, h)); c = mix(c, vec3(.36, .44, .70), smoothstep(.25, 1., h));
+  vec2 a = uv - vec2(-.55, .05), b = uv - vec2(.7, .55);
+  c += vec3(1., .55, .30) * .32 * exp(-dot(a, a) * 2.2) + vec3(.30, .40, .95) * .22 * exp(-dot(b, b) * 2.);
+  c += vec3(1., .85, .7) * .10 * pow(max(0., sin(uv.x * 7. + uv.y * 3. + uTh) * .5 + .5), 6.) * smoothstep(-.1, .8, uv.y);        // faint light shafts
+  // soft clouds drifting upward in three layers; each layer rises exactly one noise period per 8 s loop, so it closes seamlessly
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i), per = 4. + fi * 2., sc = 3.0 + fi * 1.7;
+    vec2 q = uv * vec2(.9, 1.) * sc + vec2(fi * 3.7, 0.); q.y -= uTh / 6.2831853 * per; q.x += sin(uTh + fi) * .12;
+    float dn = smoothstep(.40, .62, cloudN(q, per)), dl = smoothstep(.40, .62, cloudN(q + vec2(.06, -.08), per));         // density, and density a step toward the light
+    float lit = clamp(dn - dl * .55 + .38, 0., 1.);
+    vec3 cc = mix(vec3(.42, .38, .66), vec3(1.25, 1.12, 1.02), lit) * (1. - .05 * fi);
+    c = mix(c, cc, dn * (.95 - .12 * fi) * smoothstep(-.9, .1, uv.y + .25 * fi));
+  }
+  return c * (1. - .28 * smoothstep(.5, 1.6, length(uv)));
+}
+float h31(vec3 p){ p = fract(p * .3183099 + .1); p *= 17.; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h31(vec3(i, 1.)), h31(vec3(i + vec2(1., 0.), 1.)), f.x), mix(h31(vec3(i + vec2(0., 1.), 1.)), h31(vec3(i + 1., 1.)), f.x), f.y); }
+vec3 metal(vec3 r, vec3 tint, float fres){ vec3 e = env(r); return e * mix(vec3(.93), tint * 1.25 + .04, .9) + e * fres * .22; }
+
+void main(){
+  vec2 uv = vUv * 2. - 1.; uv.x *= uAspect;
+  vec3 ww = normalize(uTa - uRo), uu = normalize(cross(ww, vec3(0., 1., 0.))), vv = cross(uu, ww);
+  vec3 rd = normalize(uv.x * uu + uv.y * vv + uF * ww);
+  vec3 L = normalize(vec3(-.35, .85, .30));
+  float t = 0.; bool hit = false; vec3 p = uRo;
+  for (int i = 0; i < 90; i++) { p = uRo + rd * t; float d = map(p); if (d < .0012) { hit = true; break; } t += d * .85; if (t > 24.) break; }
+  vec3 col;
+  if (!hit) { col = backdrop(rd, uv); }
+  else if (p.y < beads(p) + .0015) {
+    vec3 n = vec3(0., 1., 0.);
+    float fib = vn(p.xz * 38.) * .5 + vn(p.xz * 9.) * .5;
+    vec3 bone = vec3(.84, .80, .72) * (.94 + .1 * fib);
+    float sh = shadow(p + n * .01, L), ao = aoB(p, n);
+    vec3 diff = bone * (vec3(1., .96, .90) * max(dot(n, L), 0.) * sh + vec3(.62, .60, .56) * .62 * ao);
+    // coloured light bleeding from the beads onto the paper, plus a soft mirror image
+    vec3 rr = reflect(rd, n); float tr = traceB(p + n * .01, rr); float fr = .06 + .1 * pow(1. - abs(rd.y), 4.);
+    vec3 refl = tr > 0. ? metal(reflect(rr, nrmB(p + rr * tr)), beadCol(p + rr * tr), 0.) * .9 : env(rr) * .35;
+    col = diff * (1. - fr) + refl * fr;
+    col *= .88 + .3 * exp(-dot(p.xz, p.xz) * .05);                                           // soft pool of light under the beads
+    col = mix(col, vec3(1., .66, .5) * .9, smoothstep(8., 22., t));                           // the table melts into the horizon of the cyclorama
+  } else {
+    vec3 n = nrmB(p), v = -rd; float ao = aoB(p, n);
+    vec3 r = reflect(rd, n), tint = beadCol(p);
+    float t2 = traceB(p + n * .02, r), fres = pow(1. - max(dot(n, v), 0.), 5.);
+    vec3 c = t2 > 0. ? metal(reflect(r, nrmB(p + r * t2)), beadCol(p + r * t2), 0.) * .82 : metal(r, tint, fres);
+    col = c * mix(.72, 1., ao);
+  }
+  // knife trail
+  if (uKnifeA > .001) {
+    vec2 a = uKnife.xy, b = uKnife.zw, pa = uv - a, ba = b - a; float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-5), 0., 1.), d = length(pa - ba * h);
+    float line = smoothstep(.006, .001, d) * uKnifeA, glow = smoothstep(.04, .0, d) * uKnifeA * .12;
+    col = mix(col, vec3(.07, .065, .06), line * .85) - glow * .1;
+  }
+  gl_FragColor = vec4(col, 1.);
+}`;
+
+const uniforms = {
+  uAspect: { value: 1 }, uTh: { value: 0 }, uRo: { value: new THREE.Vector3() }, uTa: { value: new THREE.Vector3(0, 0.3, 0) }, uF: { value: 2.5 }, uN: { value: 0 },
+  uP: { value: Array.from({ length: MAX }, () => new THREE.Vector4()) }, uC: { value: Array.from({ length: MAX }, () => new THREE.Vector3()) },
+  uKnife: { value: new THREE.Vector4() }, uKnifeA: { value: 0 }
+};
+const mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms, depthTest: false, depthWrite: false });
+const mesh = new THREE.Mesh(fullscreenTriangle(), mat); mesh.frustumCulled = false;
+const scene = new THREE.Scene(); scene.add(mesh);
+
+// ---------- bead model (CPU): scripted orbits + a decaying offset so cut halves glide apart ----------
+const RAD = [.62, .46, .36, .30, .26, .22, .18], AX = [1.7, 1.2, 1.9, .8, 1.5, 1.0, 2.1], AZ = [.55, .8, .45, .9, .35, .7, .6];
+const KX = [1, 2, 1, 3, 2, 1, 3], KZ = [2, 1, 3, 1, 1, 2, 2], PH = [0, 1.9, 3.3, .7, 4.4, 2.6, 5.5];
+let beads = [];
+const orbitXZ = (b, th, out) => out.set(b.ax * Math.cos(th * b.kx + b.ph), b.az * Math.sin(th * b.kz + b.ph * 1.3) - 0.15);
+function reset() {
+  beads = RAD.map((r, i) => ({ r, ax: AX[i], az: AZ[i], kx: KX[i], kz: KZ[i], ph: PH[i], off: new THREE.Vector2(), vel: new THREE.Vector2(), col: i % PAL.length, cool: 0 }));
+  cuts = 0;
+}
+let cuts = 0; reset(); window.__state = () => ({ beads: beads.length, cuts });
+document.getElementById('reset').onclick = reset;
+addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') reset(); });
+
+// camera maths shared with the shader
+const ww = new THREE.Vector3(), uu = new THREE.Vector3(), vv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3(), o2 = new THREE.Vector2();
+function project(P, out) {   // aspect-corrected NDC (x*aspect, y) and radius factor f/z
+  tmp.copy(P).sub(uniforms.uRo.value); const z = tmp.dot(ww); if (z <= 0.01) return false;
+  out.set(uniforms.uF.value * tmp.dot(uu) / z, uniforms.uF.value * tmp.dot(vv) / z); out.k = uniforms.uF.value / z; return true;
+}
+const pc = new THREE.Vector2(), cur = new THREE.Vector3();
+function cutAlong(a, b, th) {
+  const ba = b.clone().sub(a), len2 = ba.lengthSq(); if (len2 < 1e-6 || beads.length >= MAX) return;
+  const nrm = new THREE.Vector2(-ba.y, ba.x).normalize();
+  for (const bd of beads.slice()) {
+    if (bd.cool > 0 || bd.r < 0.1 || beads.length >= MAX) continue;
+    orbitXZ(bd, th, o2); cur.set(o2.x + bd.off.x, bd.r, o2.y + bd.off.y);
+    if (!project(cur, pc)) continue;
+    const h = THREE.MathUtils.clamp(pc.clone().sub(a).dot(ba) / len2, 0, 1), d = pc.distanceTo(a.clone().addScaledVector(ba, h));
+    if (d > pc.k * bd.r * 0.92) continue;
+    // split: volume-conserving children, one keeps the colour, the other takes the next Pantone neighbour
+    const r2 = bd.r * Math.cbrt(0.5), sep = new THREE.Vector2(nrm.x, -nrm.y).normalize().multiplyScalar(r2 * 1.15);
+    const mk = (sgn, col) => { const c = { r: r2, ax: bd.ax * (0.88 + Math.random() * 0.24), az: bd.az * (0.88 + Math.random() * 0.24), kx: bd.kx, kz: bd.kz, ph: bd.ph + sgn * (0.35 + Math.random() * 0.3), off: new THREE.Vector2(), vel: new THREE.Vector2(), col, cool: 0.6 };
+      orbitXZ(c, th, o2); c.off.set(o2.x * 0 + (cur.x - o2.x) + sep.x * sgn * 0.5, (cur.z - o2.y) + sep.y * sgn * 0.5); c.vel.copy(sep).multiplyScalar(sgn * 3); return c; };
+    beads.splice(beads.indexOf(bd), 1, mk(-1, bd.col), mk(1, (bd.col + 1) % PAL.length)); cuts++;
+  }
+}
+
+// ---------- pointer: swipe to cut ----------
+let down = false, A = new THREE.Vector2(), B = new THREE.Vector2(), knifeA = 0, lastT = 0;
+const canvas = app.renderer.domElement;
+const ndc = e => { const r = canvas.getBoundingClientRect(); return new THREE.Vector2(((e.clientX - r.left) / r.width * 2 - 1) * uniforms.uAspect.value, -((e.clientY - r.top) / r.height * 2 - 1)); };
+canvas.addEventListener('pointerdown', e => { down = true; A = ndc(e); B = A.clone(); knifeA = 1; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => { if (!down) return; const n = ndc(e); cutAlong(B, n, lastT); B = n; });
+const end = () => { down = false; };
+canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+
+app.onResize((w, h, dpr) => { post.setSize(w, h, dpr); uniforms.uAspect.value = w / h; });
+app.adapt = avg => { if (avg > 1 / 48 && post.p.scale > 0.45) post.setScale(Math.max(0.45, post.p.scale - 0.1)); };
+
+app.start((t, dt) => {
+  const th = TAU * t / DURATION, r = app.renderer; lastT = th;
+  uniforms.uTh.value = th;
+  uniforms.uRo.value.set(Math.sin(th) * 0.9, 1.15 + 0.15 * Math.cos(th), 5.6);
+  ww.copy(uniforms.uTa.value).sub(uniforms.uRo.value).normalize(); uu.crossVectors(ww, up).normalize(); vv.crossVectors(uu, ww);
+  // children glide onto their own orbits
+  const k = Math.exp(-3 * dt);
+  for (const b of beads) { b.off.addScaledVector(b.vel, dt).multiplyScalar(1); b.vel.multiplyScalar(k); b.off.multiplyScalar(dt ? Math.exp(-1.4 * dt) : 1); b.cool = Math.max(0, b.cool - dt); }
+  uniforms.uN.value = beads.length;
+  beads.forEach((b, i) => { orbitXZ(b, th, o2); uniforms.uP.value[i].set(o2.x + b.off.x, b.r, o2.y + b.off.y, b.r); uniforms.uC.value[i].fromArray(PALIN[b.col]); });
+  // knife trail: from where the swipe started to where it is now, fading after release
+  uniforms.uKnife.value.set(A.x, A.y, B.x, B.y); knifeA = down ? 1 : Math.max(0, knifeA - dt * 2.5); uniforms.uKnifeA.value = knifeA;
+  r.setRenderTarget(post.scene); r.render(scene, ORTHO);
+  post.bloomAndComposite(t);
+});
+</script>
+</body>
+</html>

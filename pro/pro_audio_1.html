@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chladni Plate · Sound Made Visible</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#0c0b0a;--fg:#f1e6cc;--mut:#b9ab8c;--acc2:#e0b45f}#fq{position:fixed;right:28px;top:68px;z-index:5;font:500 12px 'Inter',monospace;letter-spacing:.1em;color:#e0b45f;text-align:right;text-shadow:0 0 10px #000}#fq b{display:block;font:700 34px 'Space Grotesk',sans-serif;color:#f1e6cc;letter-spacing:-.01em}</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="fq"><b id="hz">0 Hz</b><span id="md"></span></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION, smoothstep } from './lib/common.js';
+import { sound } from './lib/audio.js';
+
+hud({ eyebrow: 'Cymatics · Chladni figures', title: 'Chladni Plate', text: 'Sand on a brass plate is thrown off wherever the metal moves and gathers on the lines where it stands still. Change the pitch and the figure rearranges itself. Between notes the plate is shaken and the sand scatters.', tip: 'Move the cursor to bend the pitch · Sound: click to hear the plate' });
+const app = createApp({ label: 'Chladni · 1 pass', clear: 0x0c0b0a });
+const r = app.renderer;
+
+const mat = new THREE.ShaderMaterial({
+  vertexShader: `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`,
+  depthTest: false, depthWrite: false,
+  uniforms: { uAsp: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) }, uM0: { value: new THREE.Vector2(2, 3) }, uM1: { value: new THREE.Vector2(3, 5) }, uS: { value: 0 }, uShake: { value: 0 }, uTh: { value: 0 } },
+  fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; uniform float uAsp, uS, uShake, uTh; uniform vec2 uRes, uM0, uM1;
+  const float PI = 3.14159265;
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  float cf(vec2 q, vec2 mn){ return cos(mn.y * PI * q.x) * cos(mn.x * PI * q.y) - cos(mn.x * PI * q.x) * cos(mn.y * PI * q.y); }
+  float field(vec2 q){ return mix(cf(q, uM0), cf(q, uM1), uS); }
+  void main(){
+    vec2 p = (vUv * 2. - 1.) * vec2(uAsp, 1.), px = vUv * uRes;
+    float S = .78; vec2 c = p / S * .5 + .5;                                  // plate coordinates 0..1
+    vec2 e = abs(p / S) - 1.; float sd = max(e.x, e.y);                       // signed distance to the plate edge (in plate units)
+    // felt
+    vec3 felt = vec3(.030, .028, .025) * (.7 + .6 * vn(px * .6)) * (1. - .55 * smoothstep(.4, 1.5, length(p)));
+    float shadow = smoothstep(.16, -.02, sd) * .85;
+    vec3 col = felt * (1. - shadow);
+    if (sd < 0.) {
+      // brushed brass with a soft light from the top left
+      float brush = vn(vec2(px.x * .012, px.y * 1.3)) * .55 + vn(vec2(px.x * .05, px.y * 2.7)) * .25;
+      float lit = .62 + .5 * smoothstep(-1.2, 1.2, (-p.x + p.y * .8) * .9);
+      vec3 brass = vec3(.60, .44, .21) * lit * (.82 + .3 * brush);
+      brass += vec3(.08, .06, .03) * pow(max(0., 1. - abs(sd + .5) * 3.), 2.) * .0;
+      // sand: it sits where the field is ~0. During the shake the sample position is jittered so the sand is flung about.
+      vec2 q = c + (vec2(h21(floor(px / 2.)), h21(floor(px / 2.) + 9.1)) - .5) * uShake * .22;
+      float f = field(q);
+      float dens = exp(-pow(abs(f) * 3.4, 1.6)) * (1. - uShake * .8) + uShake * .16 * vn(px * .05);
+      vec2 cell = floor(px / 1.7);
+      float g = h21(cell), g2 = h21(cell + 17.3);
+      float sand = step(g, dens * .93) * (.7 + .3 * g2);
+      vec3 ivory = vec3(.94, .90, .78) * (.88 + .22 * g2);
+      float sh = step(h21(cell + vec2(-1., 1.)), dens * .93) * .5;               // tiny contact shadow
+      col = brass * (1. - sh * .35 * (1. - sand));
+      col = mix(col, ivory, sand);
+      // bevel
+      float eb = -sd; float bev = smoothstep(.02, .0, eb);
+      col += vec3(.45, .38, .22) * bev * (.5 + .5 * smoothstep(-.8, .8, -(p.x - p.y) * .9)) ;
+      col *= 1. - .22 * smoothstep(.0, .04, eb) * 0. ;
+      // four screws
+      vec2 sc = abs(c - .5) - .46; float scd = length(sc) * (S * 2. / 1.);
+      float scr = smoothstep(.035, .03, scd);
+      float slot = smoothstep(.006, .003, abs(dot(sc, normalize(vec2(1., .55)))) * 2.) * step(scd, .03);
+      col = mix(col, vec3(.30, .23, .12) * (1. - slot * .8), scr * .95);
+    }
+    col += (h21(px + uTh) - .5) * .02;
+    gl_FragColor = vec4(col, 1.);
+  }`
+});
+const mesh = new THREE.Mesh(fullscreenTriangle(), mat); mesh.frustumCulled = false; const scene = new THREE.Scene(); scene.add(mesh);
+app.onResize((w, h) => { mat.uniforms.uAsp.value = w / h; mat.uniforms.uRes.value.set(w, h); });
+
+// four figures, two seconds each; the last 0.8 s of every slot is the shake between notes
+const MODES = [[2, 3], [3, 5], [4, 3], [5, 6]];
+const hz = document.getElementById('hz'), md = document.getElementById('md');
+const snd = sound(); let osc, osc2, noiseG, tremG;
+snd.onstart = (ctx, out) => {
+  osc = ctx.createOscillator(); osc.type = 'sine'; osc2 = ctx.createOscillator(); osc2.type = 'triangle';
+  const g = ctx.createGain(); g.gain.value = .22; const g2 = ctx.createGain(); g2.gain.value = .05; tremG = ctx.createGain(); tremG.gain.value = 1;
+  osc.connect(g); osc2.connect(g2); g.connect(tremG); g2.connect(tremG); tremG.connect(out); osc.start(); osc2.start();
+  const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const ns = ctx.createBufferSource(); ns.buffer = nb; ns.loop = true; const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3500; noiseG = ctx.createGain(); noiseG.gain.value = 0; ns.connect(hp); hp.connect(noiseG); noiseG.connect(out); ns.start();   // sand hiss
+};
+snd.onstop = () => { try { osc.stop(); osc2.stop(); } catch (e) {} };
+
+app.start((t) => {
+  const slot = Math.floor(t / 2) % 4, loc = t - Math.floor(t / 2) * 2, s = smoothstep(1.2, 2., loc);
+  const px_ = app.pointer.x * .5, py_ = app.pointer.y * .4;
+  const a = MODES[slot], b = MODES[(slot + 1) % 4], u = mat.uniforms;
+  u.uM0.value.set(a[0] + px_, a[1] + py_); u.uM1.value.set(b[0] + px_, b[1] + py_); u.uS.value = s;
+  u.uShake.value = Math.sin(Math.PI * s) * 1.0; u.uTh.value = Math.floor(t * 30);
+  const f0 = 68 * Math.hypot(a[0] + px_, a[1] + py_), f1 = 68 * Math.hypot(b[0] + px_, b[1] + py_), f = f0 + (f1 - f0) * s;
+  hz.textContent = Math.round(f) + ' Hz'; md.textContent = 'mode (' + (a[0] + px_).toFixed(1) + ', ' + (a[1] + py_).toFixed(1) + ') → (' + (b[0] + px_).toFixed(1) + ', ' + (b[1] + py_).toFixed(1) + ')';
+  if (snd.on && osc) { const T = snd.ctx.currentTime; osc.frequency.setTargetAtTime(f, T, .08); osc2.frequency.setTargetAtTime(f * 2.005, T, .08); noiseG.gain.setTargetAtTime(Math.sin(Math.PI * s) * .05, T, .05); tremG.gain.setTargetAtTime(1 - .55 * Math.sin(Math.PI * s), T, .06); }
+  r.setRenderTarget(null); r.render(scene, ORTHO);
+});
+</script>
+</body>
+</html>

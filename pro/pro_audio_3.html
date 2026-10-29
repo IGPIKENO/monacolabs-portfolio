@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grain Composition · Granular Synthesis</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#ece8dc;--fg:#16140f;--mut:#5d584b;--acc2:#d6362b}.hud{text-shadow:0 0 14px #ece8dc,0 0 6px #ece8dc}</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, hud, TAU, DURATION } from './lib/common.js';
+import { layer, hash } from './lib/c2d.js';
+import { sound, reverb } from './lib/audio.js';
+
+hud({ eyebrow: 'Granular synthesis · Composition No. 3', title: 'Grain Composition', text: 'One slow pad is cut into hundreds of tiny grains of a few milliseconds each. The playhead walks the waveform and every grain is thrown a little off it, higher or lower. The picture is the cloud they make.', tip: 'Move the cursor: left to right scrubs the playhead · up and down widens the scatter · Sound: click to hear the grains' });
+const app = createApp({ label: 'Grains · 1 pass', clear: 0xece8dc });
+
+const L = layer(app, { frag: /* glsl */`
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  void main(){
+    vec2 px = vUv * uRes;
+    // slight print misregistration: the red channel is printed a hair off the others
+    float r = texture2D(tC, vUv + vec2(1.2, -.8) / uRes).r, g = texture2D(tC, vUv).g, b = texture2D(tC, vUv - vec2(.8, -.6) / uRes).b;
+    vec3 col = vec3(r, g, b);
+    float fib = vn(px * vec2(.9, .1)) * .5 + vn(px * vec2(.12, 1.2)) * .5, cl = vn(px * .006) * .6 + vn(px * .03) * .4;
+    col *= .94 + .08 * fib + .05 * cl;
+    col *= 1. - .2 * smoothstep(.55, 1.5, length((vUv - .5) * vec2(uAsp, 1.) * 1.6));
+    col += (h21(px + floor(uTime * 24.)) - .5) * .018;
+    gl_FragColor = vec4(col, 1.);
+  }` });
+
+const INK = '#16140f', RED = '#d6362b', BLUE = '#1d4fa0', YEL = '#f0b81c', PAPER = '#ece8dc';
+const COL = [RED, BLUE, YEL, INK, RED, BLUE];
+// the source sound: a two-layer pad, rendered once into an array (used for the picture and, if enabled, for the audio)
+const SR = 22050, DUR = 8, SRC = new Float32Array(SR * DUR);
+{ const notes = [110, 138.59, 164.81, 220, 277.18]; for (let i = 0; i < SRC.length; i++) { const tt = i / SR; let v = 0; notes.forEach((f, k) => { v += Math.sin(TAU * f * tt + k) * (.5 + .5 * Math.sin(TAU * tt / DUR * (k + 1) + k)) * .22 + Math.sin(TAU * f * 2.003 * tt) * .06; }); SRC[i] = v * (.55 + .45 * Math.sin(Math.PI * tt / DUR)); } }
+const NB = 360, WAVE = new Float32Array(NB); for (let b = 0; b < NB; b++) { let m = 0; const i0 = Math.floor(b / NB * SRC.length), i1 = Math.floor((b + 1) / NB * SRC.length); for (let i = i0; i < i1; i += 8) m = Math.max(m, Math.abs(SRC[i])); WAVE[b] = m; }
+
+const NG = 520;
+// each grain has its own cycle length 8/k seconds, so everything repeats exactly every loop
+const grain = (i, t, mouse) => {
+  const k = [8, 10, 12, 16, 20][Math.floor(hash(i, 1) * 5)], P = DURATION / k, ph = hash(i, 2), cyc = t / P + ph, c = Math.floor(cyc), u = cyc - c, cm = ((c % k) + k) % k;
+  const tb = (c - ph) * P, headB = ((tb % DURATION) + DURATION) % DURATION / DURATION;
+  const head = mouse.real ? mouse.p : headB;
+  const sc = (.015 + .1 * hash(i, 3 + cm)) * (mouse.real ? mouse.sc : 1), gx = (hash(i, 40 + cm) + hash(i, 80 + cm) - 1) * sc * 2;
+  return { x: head + gx, pitch: hash(i, 120 + cm), size: .4 + hash(i, 160 + cm) * .6, u, col: COL[Math.floor(hash(i, 200 + cm) * COL.length)], shape: hash(i, 240 + cm) };
+};
+
+const snd = sound(); let wet, timer, lastP = 0, lastSc = .5, lastReal = false;
+snd.onstart = (ctx, out) => {
+  const buf = ctx.createBuffer(1, SRC.length, SR); buf.copyToChannel(SRC, 0); wet = reverb(ctx, 3.5); const wg = ctx.createGain(); wg.gain.value = .6; wet.connect(wg); wg.connect(out);
+  timer = setInterval(() => {
+    for (let n = 0; n < 3; n++) {
+      const t0 = ctx.currentTime + Math.random() * .12, pos = ((lastP + (Math.random() + Math.random() - 1) * (.03 + .12 * lastSc)) % 1 + 1) % 1 * (DUR - .4);
+      const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = [1, 1.5, 2, .75, 1.25, 3][Math.floor(Math.random() * 6)];
+      const g = ctx.createGain(), len = .11 + Math.random() * .25; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(.34, t0 + len * .5); g.gain.linearRampToValueAtTime(0, t0 + len);
+      const p = ctx.createStereoPanner(); p.pan.value = Math.random() * 1.6 - .8; s.connect(g); g.connect(p); p.connect(out); p.connect(wet); s.start(t0, pos, len + .02);
+    }
+  }, 95);
+};
+snd.onstop = () => clearInterval(timer);
+
+app.start((t) => {
+  const { ctx } = L; L.begin(); const W = L.w, H = L.h, ptr = app.pointer;
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+  const mouse = { real: ptr.real, p: Math.min(1, Math.max(0, ptr.x * .5 + .5)), sc: .4 + 1.8 * (ptr.y * .5 + .5) };
+  lastP = mouse.real ? mouse.p : (t / DURATION) % 1; lastSc = mouse.real ? mouse.sc : .5;
+  const m = Math.min(W, H), x0 = W * .06, x1 = W * .94, yc = H * .5, wh = H * .11;
+  // big black circle and a long diagonal, as a Bauhaus score
+  ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(W * .8, H * .27, m * .13, 0, TAU); ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(W * .06, H * .12); ctx.lineTo(W * .94, H * .82); ctx.stroke();
+  ctx.fillStyle = YEL; ctx.fillRect(W * .06, H * .74, m * .42, m * .05);
+  // waveform: mirrored bars
+  ctx.fillStyle = INK; const bw = (x1 - x0) / NB;
+  for (let b = 0; b < NB; b++) { const a = WAVE[b] * wh * 2.2 + 1; ctx.fillRect(x0 + b * bw, yc - a, Math.max(1, bw * .62), a * 2); }
+  // grains
+  const headP = mouse.real ? mouse.p : (t / DURATION) % 1;
+  const arr = []; for (let i = 0; i < NG; i++) arr.push(grain(i, t, mouse));
+  arr.forEach(g => {
+    const env = Math.sin(Math.PI * g.u), env2 = env * env;
+    const x = x0 + (((g.x % 1) + 1) % 1) * (x1 - x0), y = yc - (g.pitch - .5) * H * .78, r = (3 + g.size * 20) * (.25 + env2 * .75) * (m / 800 + .4);
+    ctx.globalAlpha = .1 + env * .85;
+    ctx.strokeStyle = g.col; ctx.fillStyle = g.col;
+    if (g.shape < .62) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); g.shape < .3 ? ctx.fill() : (ctx.lineWidth = 1.6, ctx.stroke()); }
+    else if (g.shape < .85) { ctx.fillRect(x - r * .9, y - r * .18, r * 1.8, r * .36); }
+    else { ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x, y - r * 1.2); ctx.lineTo(x + r, y + r * .8); ctx.lineTo(x - r, y + r * .8); ctx.closePath(); ctx.stroke(); }
+  });
+  ctx.globalAlpha = 1;
+  // playhead
+  const hx = x0 + headP * (x1 - x0); ctx.strokeStyle = RED; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(hx, yc - H * .42); ctx.lineTo(hx, yc + H * .42); ctx.stroke();
+  ctx.fillStyle = RED; ctx.beginPath(); ctx.arc(hx, yc - H * .42, 7, 0, TAU); ctx.fill();
+  ctx.fillStyle = INK; ctx.font = '600 11px "Space Grotesk", sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(`PLAYHEAD ${(headP * DUR).toFixed(2)} s   ·   ${NG} GRAINS   ·   SCATTER ${(mouse.real ? mouse.sc : 1).toFixed(2)}`, x0, H * .08);
+  L.render(t);
+});
+</script>
+</body>
+</html>

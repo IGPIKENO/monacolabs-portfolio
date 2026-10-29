@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kinetic Type · Words That Melt</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#ece5d4;--fg:#15110c;--mut:#5f5648;--acc2:#c93a1f}.hud{text-shadow:none}.hud.title{left:34px;bottom:30px}.hud.title h1{font-family:'Space Grotesk',sans-serif;font-size:15px;letter-spacing:.18em;text-transform:uppercase}.hud.title .eb{display:none}</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, hud, TAU, DURATION, smoothstep } from './lib/common.js';
+import { layer } from './lib/c2d.js';
+
+hud({ eyebrow: 'Kinetic type', title: 'Kinetic Type', text: 'The word is ordinary ink on paper until something moves across it. The cursor leaves a field of velocity behind, and the letters are pulled along it. Every two seconds a word melts and sets again as the next.', tip: 'Drag the cursor through the letters' });
+const app = createApp({ label: 'Kinetic type · 1 pass', clear: 0xece5d4 });
+const TR = 22;
+const L = layer(app, { uniforms: { uTr: { value: Array.from({ length: TR }, () => new THREE.Vector4(-9, -9, 0, 0)) }, uMelt: { value: 0 } }, frag: /* glsl */`
+  uniform vec4 uTr[${TR}]; uniform float uMelt;
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  void main(){
+    vec2 px = vUv * uRes, asp = vec2(uAsp, 1.);
+    // velocity field left by the cursor trail: every point drags the type along its own motion
+    vec2 disp = vec2(0.);
+    for (int i = 0; i < ${TR}; i++) { vec4 T = uTr[i]; vec2 d = (vUv - T.xy) * asp; float w = exp(-dot(d, d) * 38.) * (1. - float(i) / ${TR}.); disp += T.zw * w; }
+    // the melt: letters sag and run downward, with a rippling edge
+    float sag = uMelt * (.05 + .22 * vn(vec2(vUv.x * 7., 3.))) * (.4 + vUv.y);
+    vec2 wob = vec2(sin(vUv.y * 40. + uTime * 3.) * .0035, 0.) * uMelt;
+    vec2 uv = vUv - disp * .55 + vec2(0., sag) + wob;
+    float ink = texture2D(tC, uv).r;
+    float red = texture2D(tC, uv - disp * .35 - vec2(.004, -.006) * (.4 + uMelt * 3.)).r;
+    float fib = vn(px * vec2(.9, .08)) * .5 + vn(px * vec2(.07, 1.1)) * .5, cl = vn(px * .004) * .6 + vn(px * .02) * .4;
+    vec3 paper = vec3(.925, .895, .830) * (.95 + .07 * fib + .06 * cl);
+    paper *= 1. - .16 * smoothstep(.5, 1.6, length((vUv - .5) * asp * 1.4));
+    vec3 col = mix(paper, vec3(.80, .22, .12), red * .88);
+    col = mix(col, vec3(.07, .06, .05), smoothstep(.35, .62, ink));
+    col += (h21(px + floor(uTime * 24.)) - .5) * .02;
+    gl_FragColor = vec4(col, 1.);
+  }` });
+
+const WORDS = ['Liquid', 'Drift', 'Melt', 'Bloom'];
+const virt = tt => { const th = TAU * tt / DURATION; return [.55 * Math.sin(th) + .12 * Math.sin(3 * th + .7), .38 * Math.sin(2 * th + 1.1)]; };
+const hist = [];
+const draw = (ctx, W, H, word, a) => {
+  ctx.globalAlpha = a; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  let size = H * .62; ctx.font = `italic 800 ${size}px Georgia, 'Times New Roman', serif`; const w = ctx.measureText(word).width; if (w > W * .9) size *= W * .9 / w; ctx.font = `italic 800 ${size}px Georgia, 'Times New Roman', serif`;
+  ctx.fillText(word, W / 2, H * .5 + size * .28);
+};
+app.start((t) => {
+  const { ctx } = L; L.begin(); const W = L.w, H = L.h, ptr = app.pointer;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  // word slots of 2 s: the word melts across the slot boundary and is replaced
+  const slot = Math.floor(t / 2), loc = t - slot * 2, nextW = WORDS[(slot + 1) % 4], curW = WORDS[slot % 4];
+  const toNext = smoothstep(1.55, 2, loc), fromPrev = 1 - smoothstep(0, .45, loc);
+  draw(ctx, W, H, curW, 1 - toNext); draw(ctx, W, H, nextW, toNext); ctx.globalAlpha = 1;
+  const melt = Math.max(toNext * (1 - toNext) * 4 * .0 + Math.sin(Math.PI * toNext) , Math.sin(Math.PI * (1 - fromPrev)) * 0) ;
+  // trail
+  const U = L.mat.uniforms.uTr.value;
+  if (ptr.real) { hist.unshift([ptr.x, ptr.y]); if (hist.length > TR + 1) hist.pop(); } else hist.length = 0;
+  for (let i = 0; i < TR; i++) {
+    let a, b;
+    if (ptr.real && hist.length > i + 1) { a = hist[i]; b = hist[i + 1]; } else { a = virt(t - i * .045); b = virt(t - (i + 1) * .045); }
+    U[i].set(a[0] * .5 + .5, a[1] * .5 + .5, (a[0] - b[0]) * 6.5, (a[1] - b[1]) * 6.5);
+  }
+  L.mat.uniforms.uMelt.value = melt;
+  L.render(t);
+});
+</script>
+</body>
+</html>

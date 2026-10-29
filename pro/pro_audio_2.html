@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phosphor Vectorscope · XY Mode</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#050805;--fg:#bff5c6;--mut:#7fae86;--acc2:#ffb347}.hud.title{left:34px}</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, hud, TAU, DURATION } from './lib/common.js';
+import { layer, hash } from './lib/c2d.js';
+import { sound } from './lib/audio.js';
+
+hud({ eyebrow: 'Bench instrument · XY mode', title: 'Phosphor Vectorscope', text: 'Left and right channels drive the beam directly. Whole-number pitch ratios draw closed Lissajous figures, and the screen remembers each pass the way real P31 phosphor does.', tip: 'Move the cursor to detune the figure · Sound: stereo tones, the scope is the sound' });
+const app = createApp({ label: 'Vectorscope · CRT pass', clear: 0x000000 });
+
+// CRT: barrel distortion, glow, shadow mask, scanlines, glass reflection, bezel
+const L = layer(app, { scale: 1, frag: /* glsl */`
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  vec2 warp(vec2 uv){ vec2 c = uv * 2. - 1.; c *= 1. + dot(c, c) * .055; return c * .5 + .5; }
+  void main(){
+    vec2 px = vUv * uRes;
+    // screen window (rounded rectangle) in the centre; everything else is bezel
+    vec2 c = vUv * 2. - 1.; c.x *= uAsp; vec2 half_ = vec2(min(uAsp * .93, 1.3), .9);
+    vec2 q = abs(c) - half_ + .08; float sd = length(max(q, 0.)) - .08;
+    vec2 su = (c / half_) * .5 + .5; su = warp(su); vec2 uv = su;
+    vec3 col;
+    if (sd < 0. && uv.x > 0. && uv.x < 1. && uv.y > 0. && uv.y < 1.) {
+      vec2 o = (uv - vUv) * 0.;
+      vec3 b = vec3(0.); float wsum = 0.;
+      for (int i = 0; i < 9; i++) { float a = float(i) * .698; for (int k = 1; k < 3; k++) { vec2 d = vec2(cos(a), sin(a)) * float(k) * 2.2 / uRes; b += texture2D(tC, uv + d).rgb; wsum += 1.; } }
+      vec3 s = texture2D(tC, uv).rgb;
+      col = s + b / wsum * 1.5;
+      float scan = .86 + .14 * sin(px.y * 3.14159 * 1.2 / 1.);
+      vec3 mask = vec3(.88 + .12 * step(.33, fract(px.x / 3.)), .88 + .12 * step(.33, fract(px.x / 3. + .33)), .88 + .12 * step(.33, fract(px.x / 3. + .66)));
+      col *= scan * mask * (.97 + .03 * sin(uTime * 6.2831853 / 8. * 16.));
+      col += vec3(.01, .02, .012) * (1. - length(uv - .5));
+      col *= 1. - .5 * smoothstep(.35, .75, length(uv - .5));
+      float refl = smoothstep(.2, 1., 1. - length(uv - vec2(.28, .85)) * 1.3); col += vec3(.04, .06, .05) * refl;
+      col = mix(col, vec3(.0), smoothstep(-.012, 0., sd));
+    } else {
+      float brush = h21(vec2(px.x * .02, px.y * 1.1)) * .5 + h21(vec2(px.x * .1, px.y * 2.3)) * .3;
+      col = vec3(.10, .105, .10) * (.7 + .5 * brush) * (.55 + .5 * smoothstep(1.3, 0., length(c)));
+      col *= .55 + .45 * smoothstep(.15, -.05, sd) + .0;
+      col += vec3(.18, .17, .14) * smoothstep(.03, .0, sd) * smoothstep(-.02, .0, sd) * .6;      // lip of the bezel
+      col *= .35 + .65 * smoothstep(.0, .06, sd);
+    }
+    gl_FragColor = vec4(col, 1.);
+  }` });
+
+const G = '#7dff8a', GD = 'rgba(125,255,138,';
+// ratio of the left/right pitch changes every two seconds; the figure is drawn from a window of the past, so old figures fade the way phosphor does
+const RAT = [[3, 2], [4, 3], [5, 4], [5, 3]];
+const ratioAt = tw => RAT[Math.floor((((tw % DURATION) + DURATION) % DURATION) / 2) % 4];
+const snd = sound(); let oL, oR;
+snd.onstart = (ctx, out) => {
+  const mk = pan => { const o = ctx.createOscillator(); o.type = 'sine'; const g = ctx.createGain(); g.gain.value = .22; const p = ctx.createStereoPanner(); p.pan.value = pan; o.connect(g); g.connect(p); p.connect(out); o.start(); return o; };
+  oL = mk(-1); oR = mk(1);
+};
+snd.onstop = () => { try { oL.stop(); oR.stop(); } catch (e) {} };
+
+const F0 = 55;      // base pitch (Hz) for the audio; the beam runs at a visual rate
+app.start((t) => {
+  const { ctx } = L; L.begin(); const W = L.w, H = L.h, asp = W / H;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const hw = Math.min(asp * .93, 1.3) * H / 2 * .94, hh = H * .9 / 2 * .94, cx = W / 2, cy = H / 2, S = Math.min(hw, hh) * .84, th = TAU * t / DURATION;
+  // graticule
+  ctx.strokeStyle = GD + '.13)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = -4; i <= 4; i++) { ctx.moveTo(cx + i * S / 4, cy - S); ctx.lineTo(cx + i * S / 4, cy + S); ctx.moveTo(cx - S, cy + i * S / 4); ctx.lineTo(cx + S, cy + i * S / 4); }
+  ctx.stroke(); ctx.strokeStyle = GD + '.28)'; ctx.beginPath(); ctx.moveTo(cx - S, cy); ctx.lineTo(cx + S, cy); ctx.moveTo(cx, cy - S); ctx.lineTo(cx, cy + S); ctx.stroke();
+  ctx.beginPath(); for (let i = -20; i <= 20; i++) { const k = i * S / 20; ctx.moveTo(cx + k, cy - 3); ctx.lineTo(cx + k, cy + 3); ctx.moveTo(cx - 3, cy + k); ctx.lineTo(cx + 3, cy + k); } ctx.stroke();
+  // the beam: 1.6 s of history, drawn in 80 chunks of 28 samples. Intensity falls with age (phosphor decay) and with beam speed.
+  const detune = app.pointer.x * .015, N = 80, M = 28, WIN = 1.6, RATE = 2.4;
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (let c = 0; c < N; c++) {
+    const a0 = WIN * (1 - c / N), alpha = Math.exp(-a0 / .38) * .9;
+    ctx.strokeStyle = `rgba(125,255,138,${alpha.toFixed(3)})`; ctx.lineWidth = 1.7; ctx.beginPath();
+    for (let k = 0; k <= M; k++) {
+      const age = WIN * (1 - (c + k / M) / N), tw = t - age, [a, b] = ratioAt(tw);
+      const ph = TAU * RATE * tw, amp = .94 + .05 * Math.sin(th * 2 + tw);
+      const x = Math.sin(a * ph + detune * tw * 40) * amp + hash(Math.floor(tw * 600), 1) * .004, y = Math.sin(b * ph + 1.5708 * (.5 + .5 * Math.sin(TAU * tw / DURATION))) * amp + hash(Math.floor(tw * 600), 2) * .004;
+      k ? ctx.lineTo(cx + x * S, cy - y * S) : ctx.moveTo(cx + x * S, cy - y * S);
+    }
+    ctx.stroke();
+  }
+  // the head of the beam: a hot dot
+  { const [a, b] = ratioAt(t), ph = TAU * RATE * t, x = Math.sin(a * ph + detune * t * 40) * .94, y = Math.sin(b * ph + 1.5708 * (.5 + .5 * Math.sin(th))) * .94;
+    const g = ctx.createRadialGradient(cx + x * S, cy - y * S, 0, cx + x * S, cy - y * S, 16); g.addColorStop(0, 'rgba(230,255,230,.95)'); g.addColorStop(.25, 'rgba(125,255,138,.5)'); g.addColorStop(1, 'rgba(125,255,138,0)'); ctx.fillStyle = g; ctx.fillRect(cx + x * S - 16, cy - y * S - 16, 32, 32); }
+  ctx.globalCompositeOperation = 'source-over';
+  // readouts in amber
+  const [a, b] = ratioAt(t); ctx.font = '600 12px "Space Grotesk", monospace'; ctx.fillStyle = '#ffb347'; ctx.textAlign = 'left';
+  ctx.fillText('CH1 · 500 mV/div  ·  CH2 · 500 mV/div  ·  X-Y', cx - S, cy - S - 14);
+  ctx.textAlign = 'right'; ctx.fillText(`${a}:${b}   ${(F0 * a).toFixed(0)} Hz / ${(F0 * b).toFixed(0)} Hz`, cx + S, cy - S - 14);
+  ctx.textAlign = 'left'; ctx.fillStyle = GD + '.6)'; ctx.fillText('P31 · persistence 380 ms', cx - S, cy + S + 22);
+  L.render(t);
+  if (snd.on && oL) { const T = snd.ctx.currentTime; oL.frequency.setTargetAtTime(F0 * a * (1 + detune * 8), T, .05); oR.frequency.setTargetAtTime(F0 * b, T, .05); }
+});
+</script>
+</body>
+</html>

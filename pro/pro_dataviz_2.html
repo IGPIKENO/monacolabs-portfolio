@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Engraved Globe · Gold on Green</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#0b1f19;--fg:#f0dca8;--mut:#b9a56f;--acc2:#e6b95a}.hud{text-shadow:0 0 12px #0b1f19}#ov{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}</style>
+</head>
+<body>
+<div id="app"></div>
+<canvas id="ov"></canvas>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION } from './lib/common.js';
+import { SNOISE3 } from './lib/glsl-noise.js';
+
+hud({ eyebrow: 'Plate XII · Synthetic routes', title: 'Engraved Globe', text: 'The globe is not shaded, it is engraved. Every line runs along a parallel or a meridian and grows thicker where the surface turns away from the light, the way a copper-plate printer would cut it. Gold arcs carry synthetic traffic between fourteen made-up ports.', tip: 'Drag to turn the globe' });
+const app = createApp({ label: 'Engraving · 1 pass + overlay', clear: 0x0b1f19 });
+const r = app.renderer, TILT = .42, RG = .72;
+const mat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  uniforms: { uAsp: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) }, uYaw: { value: 0 }, uTh: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`,
+  fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; uniform float uAsp, uYaw, uTh; uniform vec2 uRes;
+  ${SNOISE3}
+  const float PI = 3.14159265, RG = ${RG.toFixed(3)}, TILT = ${TILT.toFixed(3)};
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  vec3 rotX(float a, vec3 v){ float c = cos(a), s = sin(a); return vec3(v.x, v.y * c - v.z * s, v.y * s + v.z * c); }
+  vec3 rotY(float a, vec3 v){ float c = cos(a), s = sin(a); return vec3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c); }
+  float stripes(float v, float w){ float aa = fwidth(v) * 1.1 + 1e-4; float c = 1. - abs(fract(v) - .5) * 2.; return smoothstep(1. - w - aa, 1. - w + aa, c) * clamp(.5 / (aa * 1.6 + .001) , 0., 1.); }
+  float landF(vec3 n){ return snoise(n * 1.45 + 3.1) * .62 + snoise(n * 3.2 + 9.) * .28 + snoise(n * 7.) * .1; }
+  void main(){
+    vec2 p = (vUv * 2. - 1.) * vec2(uAsp, 1.), px = vUv * uRes;
+    vec3 green = vec3(.043, .122, .098), gold = vec3(.93, .76, .36);
+    float rr = length(p);
+    vec3 col = green * (1.05 - .5 * smoothstep(.3, 1.6, rr));
+    // fine ruled background, like banknote paper
+    col += gold * .035 * smoothstep(.55, .0, abs(sin(p.y * 140. + sin(p.x * 3.) * 2.))) * smoothstep(.6, 1.4, rr);
+    float aa1 = 1.5 / uRes.y * 2.;
+    // compass ring: ticks every 2 degrees, long every 10, with a rotating inner rule
+    float ang = atan(p.y, p.x), ring = rr / RG;
+    if (ring > 1.07 && ring < 1.24) {
+      float deg = ang * 180. / PI; float t2 = abs(fract(deg / 2.) - .5) * 2., t10 = abs(fract(deg / 10.) - .5) * 2.;
+      float tick = smoothstep(.86, .93, t2) * step(ring, 1.11) + smoothstep(.93, .975, t10) * step(ring, 1.16) + step(ring, 1.075) * 0.;
+      col = mix(col, gold, clamp(tick, 0., 1.) * .8);
+    }
+    col = mix(col, gold, smoothstep(aa1 * 2., 0., abs(ring - 1.045)) * .9 + smoothstep(aa1 * 2., 0., abs(ring - 1.255)) * .8 + smoothstep(aa1 * 2., 0., abs(ring - 1.065)) * .5);
+    if (rr < RG) {
+      float z = sqrt(RG * RG - rr * rr); vec3 nv = vec3(p, z) / RG;
+      vec3 nw = rotY(-uYaw, rotX(-TILT, nv));
+      float lon = atan(nw.x, nw.z), lat = asin(clamp(nw.y, -1., 1.));
+      float I = dot(nv, normalize(vec3(-.55, .5, .67))); float tone = clamp(.5 + .6 * I, 0., 1.);        // 1 = lit
+      float lf = landF(nw), land = smoothstep(.0, .04, lf - .06);
+      float w = mix(.68, .10, tone);
+      // ocean: parallels. land: meridians and a diagonal hatch, so continents read as a different engraver's hand
+      float ocean = stripes(lat * 58. / PI * 2.2, w * .85);
+      float m1 = stripes(lon * 64. / PI * (.6 + .4 * cos(lat)) * 1.4, w * .8), m2 = stripes((lon + lat * 1.3) * 52. / PI, w * .7 * smoothstep(.55, .0, tone) );
+      float landInk = max(m1, m2 * .85);
+      float ink = mix(ocean * .62, landInk, land);
+      // coast line and graticule every 15 degrees
+      float coast = smoothstep(.02, .0, abs(lf - .06)) * 1.;
+      float gr = max(stripes(lat * 12. / PI * 1., .06), stripes(lon * 12. / PI, .06)) * .35;
+      vec3 c = green * (1.2 + .5 * tone);
+      c = mix(c, gold * (.65 + .55 * tone), clamp(ink, 0., 1.));
+      c = mix(c, gold * 1.05, clamp(coast * .8 + gr * .6, 0., 1.));
+      c = mix(c, green * .6, smoothstep(.55, .0, tone) * .35 * (1. - ink));                  // night side sinks into the plate
+      float rim = smoothstep(.9, 1., rr / RG); c = mix(c, gold, rim * .75);
+      col = c;
+    }
+    col += (h21(px) - .5) * .018;
+    gl_FragColor = vec4(col, 1.);
+  }`
+});
+const mesh = new THREE.Mesh(fullscreenTriangle(), mat); mesh.frustumCulled = false; const scene = new THREE.Scene(); scene.add(mesh);
+const ov = document.getElementById('ov'), o2 = ov.getContext('2d'); let W = 1, H = 1, DPR = 1;
+app.onResize((w, h, dpr) => { mat.uniforms.uAsp.value = w / h; mat.uniforms.uRes.value.set(w, h); W = w; H = h; DPR = dpr; ov.width = Math.round(w * dpr); ov.height = Math.round(h * dpr); });
+
+// fourteen synthetic ports (lat, lon in degrees) and routes between them
+const PT = [[41, -72], [52, 4], [34, 135], [-32, 150], [-24, -48], [31, 30], [20, 73], [2, 104], [38, -122], [56, 38], [-33, 18], [25, 55], [-12, -77], [64, -20]];
+const RT = [[0, 1], [0, 4], [1, 2], [2, 3], [1, 5], [5, 6], [6, 7], [7, 3], [8, 0], [9, 2], [1, 10], [11, 6], [4, 10], [8, 2], [12, 8], [13, 1]];
+const toV = ([la, lo]) => { la *= Math.PI / 180; lo *= Math.PI / 180; return [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)]; };
+const PV = PT.map(toV);
+const view = (v, yaw) => { const c = Math.cos(yaw), s = Math.sin(yaw); let x = v[0] * c + v[2] * s, y = v[1], z = -v[0] * s + v[2] * c; const c2 = Math.cos(TILT), s2 = Math.sin(TILT); return [x, y * c2 - z * s2, y * s2 + z * c2]; };
+const slerp = (a, b, s) => { const d = Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])), om = Math.acos(d), so = Math.sin(om) || 1, k0 = Math.sin((1 - s) * om) / so, k1 = Math.sin(s * om) / so; return [a[0] * k0 + b[0] * k1, a[1] * k0 + b[1] * k1, a[2] * k0 + b[2] * k1]; };
+const GOLD = '230,185,90'; let user = 0, down = false, lx = 0;
+r.domElement.addEventListener('pointerdown', e => { down = true; lx = e.clientX; }); addEventListener('pointerup', () => { down = false; }); addEventListener('pointermove', e => { if (down) { user += (e.clientX - lx) * .006; lx = e.clientX; } });
+app.start((t) => {
+  const th = TAU * t / DURATION, yaw = 1.0 * Math.sin(th) + user + .1; mat.uniforms.uYaw.value = yaw; mat.uniforms.uTh.value = th;
+  const cx = W / 2, cy = H / 2, S = RG * H / 2;
+  o2.setTransform(DPR, 0, 0, DPR, 0, 0); o2.clearRect(0, 0, W, H); o2.lineCap = 'round';
+  RT.forEach(([a, b], ri) => {
+    const A = PV[a], B = PV[b], ang = Math.acos(Math.max(-1, Math.min(1, A[0] * B[0] + A[1] * B[1] + A[2] * B[2])));
+    const N = 56, pts = []; for (let k = 0; k <= N; k++) { const s = k / N, v = slerp(A, B, s), lift = 1 + .16 * Math.sin(Math.PI * s) * (ang / Math.PI + .25), u = view(v, yaw); pts.push({ x: cx + u[0] * lift * S, y: cy - u[1] * lift * S, vis: u[2] > 0 || Math.hypot(u[0] * lift, u[1] * lift) > 1.0 }); }
+    o2.lineWidth = 1.1; o2.strokeStyle = `rgba(${GOLD},.55)`; o2.beginPath(); let pen = false; pts.forEach(p => { if (p.vis) { pen ? o2.lineTo(p.x, p.y) : o2.moveTo(p.x, p.y); pen = true; } else pen = false; }); o2.stroke();
+    // a gold-leaf mote runs along the route once per loop (twice for the short ones)
+    const ph = (t / DURATION * (ang < 1.2 ? 2 : 1) + ri * .173) % 1, head = ph * N, tail = 9;
+    for (let k = 0; k < tail; k++) { const i = Math.floor(head) - k; if (i < 1 || i > N) continue; const p = pts[i], q = pts[i - 1]; if (!(p.vis && q.vis)) continue; o2.strokeStyle = `rgba(255,236,170,${(1 - k / tail) * .95})`; o2.lineWidth = 2.2 * (1 - k / tail) + .6; o2.beginPath(); o2.moveTo(q.x, q.y); o2.lineTo(p.x, p.y); o2.stroke(); }
+  });
+  PV.forEach(v => { const u = view(v, yaw); if (u[2] > 0.02) { const x = cx + u[0] * S, y = cy - u[1] * S; o2.strokeStyle = `rgba(${GOLD},.95)`; o2.lineWidth = 1.2; o2.beginPath(); o2.arc(x, y, 5, 0, TAU); o2.stroke(); o2.fillStyle = `rgba(${GOLD},.95)`; o2.beginPath(); o2.arc(x, y, 1.6, 0, TAU); o2.fill(); } });
+  r.setRenderTarget(null); r.render(scene, ORTHO);
+});
+</script>
+</body>
+</html>

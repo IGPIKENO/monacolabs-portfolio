@@ -166,12 +166,12 @@
   <div>
     <span class="kick"><b></b> Available for new projects</span>
     <h1>Creative Developer<br>&amp; <span>Audio Engineer</span></h1>
-    <p>I build real-time WebGL experiences, audio-reactive interfaces, product UI motion and live data visualizations. Sixteen interactive demos below — every one runs in your browser.</p>
+    <p>I build real-time WebGL experiences, audio-reactive interfaces, product UI motion and live data visualizations. Thirty-four interactive demos below, sixteen client-style builds and eighteen Pro-series pieces that each have their own art direction. Every one runs in your browser.</p>
     <div class="cta">
       <a class="btn pri" id="heroContra" href="#" target="_blank" rel="noopener">Hire me on Contra →</a>
       <a class="btn" href="#work">View the work</a>
     </div>
-    <div class="stats"><div><b>16</b><span>live demos</span></div><div><b>60 fps</b><span>target on desktop</span></div><div><b>USD · EUR</b><span>invoicing</span></div></div>
+    <div class="stats"><div><b>34</b><span>live demos</span></div><div><b>60 fps</b><span>target on desktop</span></div><div><b>USD · EUR</b><span>invoicing</span></div></div>
   </div>
   <div id="heroV" aria-label="Preview of a 3D hero project">
     <video id="heroVid" muted loop playsinline autoplay preload="metadata" poster="exports/posters/01.jpg"><source src="exports/previews/01.mp4" type="video/mp4"></video>
@@ -244,7 +244,7 @@ const CONFIG = {
   formUrl:  'https://monacolabs.netlify.app/' // the form posts to this site's Netlify Forms (messages appear in the Netlify dashboard and, if enabled, by email)
 };
 
-const CATS = [['all', 'All'], ['3d', '3D & WebGL'], ['audio', 'Audio Engineering & DSP'], ['ui', 'UI Motion & Micro-interactions'], ['data', 'Data Viz & AI Systems']];
+const CATS = [['all', 'All'], ['3d', '3D & WebGL'], ['audio', 'Audio Engineering & DSP'], ['ui', 'UI Motion & Micro-interactions'], ['data', 'Data Viz & AI Systems'], ['pro', 'Pro Series']];
 const CAT_NAME = Object.fromEntries(CATS);
 const P = [
   ['3d', 'Creative 3D Hero', ['Three.js', 'GLSL', 'Mouse physics'], 'portfolio_3d_1.html', '01_creative_3d_hero'],
@@ -262,8 +262,27 @@ const P = [
   ['data', 'AI Agents Monitor', ['Graph', 'Canvas', 'Realtime UI'], 'portfolio_dataviz_1.html', '13_ai_agents_monitor'],
   ['data', 'Candlestick & Order Execution', ['Canvas', 'Trading UI', 'Simulated data'], 'portfolio_dataviz_2.html', '14_candlestick_order_execution'],
   ['data', 'Workflow Automation Canvas', ['SVG', 'Drag & drop', 'n8n-style'], 'portfolio_dataviz_3.html', '15_workflow_automation_pipeline'],
-  ['data', 'Media Performance Report', ['Data viz', 'GSAP', 'Tooltips'], 'portfolio_dataviz_4.html', '16_media_performance_report']
-].map(([cat, title, tags, file, out], i) => ({ cat, title, tags, file, out, n: String(i + 1).padStart(2, '0') }));
+  ['data', 'Media Performance Report', ['Data viz', 'GSAP', 'Tooltips'], 'portfolio_dataviz_4.html', '16_media_performance_report'],
+  /* Pro series: each one has its own art direction, a stats.js panel and a draw-call budget (live demos only, no video export) */
+  ['pro', 'Mercury Study', ['Raymarching', 'Chrome SDF', 'Cut to split'], 'pro/pro_3d_1.html', 'pro_3d_1'],
+  ['pro', 'Deep Currents', ['6,000 GPU streamlines', 'Whirlpools', 'Vertex shader'], 'pro/pro_3d_2.html', 'pro_3d_2'],
+  ['pro', 'Two Weathers', ['One flow field', 'Ink & light', 'Dual material'], 'pro/pro_3d_2_yinyang.html', 'pro_3d_2_yinyang'],
+  ['pro', 'Monolith Dusk', ['Procedural dunes', 'God rays', 'Sand fBm'], 'pro/pro_3d_3.html', 'pro_3d_3'],
+  ['pro', 'Matryoshka Moon', ['Procedural moon', 'Moon phases', 'Big Bang finale'], 'pro/pro_3d_4.html', 'pro_3d_4'],
+  ['pro', 'Event Horizon', ['Geodesic raymarching', 'Collapse', 'Generative synth'], 'pro/pro_3d_4_auto.html', 'pro_3d_4_auto'],
+  ['pro', 'Chladni Plate', ['Cymatics', 'Sand shader', 'Web Audio'], 'pro/pro_audio_1.html', 'pro_audio_1'],
+  ['pro', 'Phosphor Vectorscope', ['XY scope', 'CRT shader', 'Stereo tones'], 'pro/pro_audio_2.html', 'pro_audio_2'],
+  ['pro', 'Grain Composition', ['Granular synthesis', 'Canvas', 'Web Audio'], 'pro/pro_audio_3.html', 'pro_audio_3'],
+  ['pro', 'Koto Study', ['Karplus–Strong', 'Plucked strings', 'Web Audio'], 'pro/pro_audio_4.html', 'pro_audio_4'],
+  ['pro', 'Kinetic Type', ['Velocity field', 'Displacement', 'GLSL'], 'pro/pro_uimotion_1.html', 'pro_uimotion_1'],
+  ['pro', 'Gallery Depth', ['Inertial rail', 'Height-map parallax', 'Three.js'], 'pro/pro_uimotion_2.html', 'pro_uimotion_2'],
+  ['pro', 'Origami Fold', ['CSS 3D hinges', 'Paper shading', 'Spring toggle'], 'pro/pro_uimotion_3.html', 'pro_uimotion_3'],
+  ['pro', 'Prism Optics', ['Snell’s law', 'Dispersion', 'Ray tracing'], 'pro/pro_uimotion_4.html', 'pro_uimotion_4'],
+  ['pro', 'Contour Relief', ['Raymarched terrain', 'Isolines', 'fwidth AA'], 'pro/pro_dataviz_1.html', 'pro_dataviz_1'],
+  ['pro', 'Engraved Globe', ['Engraving shader', 'Great-circle arcs', 'Canvas overlay'], 'pro/pro_dataviz_2.html', 'pro_dataviz_2'],
+  ['pro', 'The Tide Table', ['Streamgraph', 'Canvas', 'Hover focus'], 'pro/pro_dataviz_3.html', 'pro_dataviz_3'],
+  ['pro', 'Heat Spiral', ['Radial series', 'Ironbow ramp', 'Glow pass'], 'pro/pro_dataviz_4.html', 'pro_dataviz_4']
+].map(([cat, title, tags, file, out], i) => ({ cat, title, tags, file, out, n: String(i + 1).padStart(2, '0'), pro: cat === 'pro' }));
 
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
 $('#yr').textContent = new Date().getFullYear();
@@ -283,22 +302,23 @@ CATS.forEach(([k, name], i) => {
 P.forEach(p => {
   const c = document.createElement('article'); c.className = 'card'; c.dataset.cat = p.cat;
   c.innerHTML = `<div class="thumb" tabindex="0" role="button" aria-label="Preview ${p.title}">
-      <video muted loop playsinline preload="none" data-src="exports/previews/${p.n}.mp4" poster="exports/posters/${p.n}.jpg"></video>
+      ${p.pro ? `<img src="exports/posters/${p.out}.jpg" alt="${p.title}" loading="lazy">` : `<video muted loop playsinline preload="none" data-src="exports/previews/${p.n}.mp4" poster="exports/posters/${p.n}.jpg"></video>`}
       <span class="num">${p.n}</span><span class="play" aria-hidden="true">▶</span></div>
     <div class="body"><div class="cat">${CAT_NAME[p.cat]}</div><h3>${p.title}</h3>
       <div class="tags">${p.tags.map(t => `<span>${t}</span>`).join('')}</div>
-      <div class="acts"><button class="btn pri" data-demo="${p.n}">Live demo</button><a class="btn" href="exports/${p.out}.mp4" download>MP4 ↓</a></div></div>`;
+      <div class="acts"><button class="btn pri" data-demo="${p.n}">Live demo</button>${p.pro ? '' : `<a class="btn" href="exports/${p.out}.mp4" download>MP4 ↓</a>`}</div></div>`;
   grid.appendChild(c); p.el = c;
 });
 // videos: load only near the viewport; play on hover/focus (on touch screens, when visible)
 const touch = matchMedia('(hover: none)').matches, reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const io = new IntersectionObserver(es => es.forEach(e => {
-  const v = e.target.querySelector('video');
+  const v = e.target.querySelector('video'); if (!v) return;
   if (e.isIntersecting) { if (!v.src && v.dataset.src) { v.preload = 'metadata'; v.src = v.dataset.src; } if (touch && !reduce && e.intersectionRatio > .6) v.play().catch(() => {}); }
   else if (touch) v.pause();
 }), { rootMargin: '200px', threshold: [0, .6] });
 P.forEach(p => {
   const t = $('.thumb', p.el), v = $('video', p.el); io.observe(p.el);
+  if (!v) { t.addEventListener('click', () => openDemo(p)); t.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDemo(p); } }); return; }
   let hov = false;
   const on = () => { hov = true; if (!v.src) { v.preload = 'metadata'; v.src = v.dataset.src; } const go = () => { if (hov) v.play().catch(() => {}); }; v.readyState >= 2 ? go() : v.addEventListener('loadeddata', go, { once: true }); };
   const off = () => { hov = false; v.pause(); v.currentTime = 0; };

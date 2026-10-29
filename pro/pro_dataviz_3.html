@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tide Table · Streamgraph</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#fff1e5;--fg:#33302e;--mut:#6b625a;--acc2:#b8233f}.hud{text-shadow:0 0 10px #fff1e5,0 0 4px #fff1e5}.hud.title{left:34px;top:70px;bottom:auto;max-width:min(520px,62vw)}.hud.title h1{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:clamp(26px,3.4vw,44px);letter-spacing:-.01em}</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, hud, TAU, DURATION } from './lib/common.js';
+import { layer, px } from './lib/c2d.js';
+
+hud({ eyebrow: 'Port Alder · cargo by type · synthetic data', title: 'The Tide Table', text: 'Ten cargoes flow through a fictional harbour, stacked around a moving centre line so each stream keeps its own shape. Hover a stream to isolate it and read its tonnage at that year.', tip: 'Move the cursor across the streams' });
+const app = createApp({ label: 'Streamgraph · 1 pass', clear: 0xfff1e5 });
+
+const L = layer(app, { frag: /* glsl */`
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  void main(){ vec2 px = vUv * uRes; vec3 col = texture2D(tC, vUv).rgb;
+    float fib = vn(px * vec2(.9, .08)) * .5 + vn(px * vec2(.07, 1.1)) * .5; col *= .955 + .06 * fib;
+    col *= 1. - .1 * smoothstep(.6, 1.6, length((vUv - .5) * vec2(uAsp, 1.) * 1.4)); col += (h21(px) - .5) * .012; gl_FragColor = vec4(col, 1.); }` });
+
+const S = [
+  ['Containers', '#0f4c5c', 1.0], ['Fuel', '#e36414', .9], ['Grain', '#fb8b24', .8], ['Coal', '#4a4e69', .74], ['Timber', '#1f6f8b', .66],
+  ['Fruit', '#9a031e', .55], ['Cement', '#8e7f74', .5], ['Fish', '#3d9fae', .42], ['Scrap', '#5f0f40', .34], ['Wool', '#d9a5a0', .26]
+];
+// inside-out stacking: the big streams in the middle, small ones on the outside, alternating
+const ORDER = [9, 7, 5, 3, 1, 0, 2, 4, 6, 8];
+const PER = [20, 10, 20 / 3, 5], WIN = 40, SCROLL = 20;
+const val = (i, yr) => { let v = 1.2; for (let k = 0; k < 3; k++) v += (.55 - k * .12) * Math.sin(TAU * yr / PER[(i + k) % 4] + i * 1.7 + k * 2.3); return Math.max(.12, v) * S[i][2] * 100; };
+const NX = 260;
+app.start((t) => {
+  const { ctx } = L; L.begin(); const W = L.w, H = L.h, ptr = px(app, L);
+  ctx.fillStyle = '#fff1e5'; ctx.fillRect(0, 0, W, H);
+  const x0 = Math.max(40, W * .06), x1 = W - x0, top = H * .34, bot = H * .86, cy = (top + bot) / 2, y0yr = 2000 + SCROLL * t / DURATION;
+  // gridlines + year ticks (every five years, scrolling with the data)
+  ctx.strokeStyle = 'rgba(51,48,46,.14)'; ctx.lineWidth = 1; ctx.fillStyle = 'rgba(51,48,46,.7)'; ctx.font = '500 11px "Inter", sans-serif'; ctx.textAlign = 'center';
+  for (let yr = Math.ceil(y0yr / 5) * 5; yr <= y0yr + WIN; yr += 5) { const x = x0 + (yr - y0yr) / WIN * (x1 - x0); ctx.beginPath(); ctx.moveTo(x, top - 30); ctx.lineTo(x, bot + 14); ctx.stroke(); ctx.fillText(String(yr), x, bot + 30); }
+  // build the stack
+  const xs = [], tot = [], cum = [];
+  for (let k = 0; k <= NX; k++) { const yr = y0yr + WIN * k / NX; let sum = 0; const row = ORDER.map(i => { const v = val(i, yr); sum += v; return v; }); xs.push(x0 + (x1 - x0) * k / NX); tot.push(sum); cum.push(row); }
+  const maxT = Math.max(...tot), sc = (bot - top) / maxT * .98;
+  // which stream is under the pointer
+  let hot = -1, hotVal = 0, hotYr = 0; { const k = Math.max(0, Math.min(NX, Math.round((ptr.x - x0) / (x1 - x0) * NX))); let y = cy - tot[k] * sc / 2; for (let j = 0; j < ORDER.length; j++) { const h = cum[k][j] * sc; if (ptr.y >= y && ptr.y < y + h) { hot = j; hotVal = cum[k][j]; hotYr = y0yr + WIN * k / NX; } y += h; } }
+  const tops = new Array(ORDER.length);
+  for (let j = 0; j < ORDER.length; j++) {
+    const i = ORDER[j], col = S[i][1], dim = hot >= 0 && hot !== j;
+    ctx.beginPath();
+    for (let k = 0; k <= NX; k++) { let y = cy - tot[k] * sc / 2; for (let q = 0; q < j; q++) y += cum[k][q] * sc; k ? ctx.lineTo(xs[k], y) : ctx.moveTo(xs[k], y); }
+    for (let k = NX; k >= 0; k--) { let y = cy - tot[k] * sc / 2; for (let q = 0; q <= j; q++) y += cum[k][q] * sc; ctx.lineTo(xs[k], y); }
+    ctx.closePath(); ctx.globalAlpha = dim ? .28 : 1; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(255,241,229,.85)'; ctx.lineWidth = 1; ctx.stroke();
+    // inline label at the thickest visible point
+    let bk = -1, bh = 0; for (let k = 20; k < NX - 20; k += 4) { if (cum[k][j] * sc > bh) { bh = cum[k][j] * sc; bk = k; } }
+    if (bh > 20 && !dim) { let y = cy - tot[bk] * sc / 2; for (let q = 0; q < j; q++) y += cum[bk][q] * sc; ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.font = `600 ${Math.min(16, Math.max(11, bh * .32))}px "Space Grotesk", sans-serif`; ctx.textAlign = 'center'; ctx.fillText(S[i][0], xs[bk], y + bh / 2 + 4); }
+  }
+  // headline numbers + readout
+  ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(51,48,46,.75)'; ctx.font = '500 11px "Inter", sans-serif'; ctx.fillText('kilotonnes per year · stacked around a moving centre line', x1, top - 44);
+  if (hot >= 0) { const i = ORDER[hot], lab = `${S[i][0]} · ${Math.round(hotVal)} kt · ${hotYr.toFixed(1)}`; ctx.font = '700 13px "Space Grotesk", sans-serif'; const w = ctx.measureText(lab).width + 20; const bx = Math.min(W - w - 10, Math.max(10, ptr.x + 14)), by = Math.max(top - 20, ptr.y - 38); ctx.fillStyle = '#33302e'; ctx.fillRect(bx, by, w, 26); ctx.fillStyle = '#fff1e5'; ctx.textAlign = 'left'; ctx.fillText(lab, bx + 10, by + 17); }
+  L.render(t);
+});
+</script>
+</body>
+</html>

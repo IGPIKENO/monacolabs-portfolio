@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Two Weathers · Ink and Light</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--acc2:#e8c27a}.hud{text-shadow:0 0 14px rgba(0,0,0,.9),0 0 5px rgba(0,0,0,.8)}.hud.title h1,.hud.title .eb{color:#f6efe0}.hud.title p,.hud.tip{color:#e8e2d4}</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, rng, TAU, DURATION } from './lib/common.js';
+import { Post } from './lib/post.js';
+import { SNOISE3 } from './lib/glsl-noise.js';
+
+hud({ eyebrow: 'Two weathers · One picture', title: 'Two Weathers', text: 'The same six thousand streamlines, two natures, one wind. On the paper the currents are drawn in black ink with a single red thread; in the dark the very same currents glow as golden light, moving in step across the border. The border between them slowly sways.', tip: 'Move the cursor: both weathers answer' });
+
+const app = createApp({ label: 'Two weathers · 2 passes', clear: 0x050508 });
+const r = app.renderer;
+const post = new Post(r, { threshold: 1.0, knee: 0.7, bloomTight: 0.3, bloomWide: 0.5, radius: 1.1, ca: 0.0008, vignette: 0.3, grain: 0.02, exposure: 1.0, tone: 0 });
+
+// ---------- shared yin-yang mask: 1 = black side (the calm, good weather), 0 = paper side (turbulent ink); plus 'inside the disc' ----------
+const MASK = /* glsl */`
+uniform float uTh, uAspect; uniform vec2 uRT;
+mat2 rot2(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+// The picture is one full-screen field split by a slow S-shaped wave: paper on the left, black on the right, and each side holds a soft seed of the other.
+// Nothing outlines it: the balance is felt, not drawn.
+vec2 yinyang(vec2 p){                         // p: aspect-corrected screen coords, y in [-1,1]. returns (black amount, 1)
+  float e = 2.2 / uRT.y, a = uTh;
+  float wave = .24 * sin(p.y * 2.1 + a) + .11 * sin(p.y * 4.3 - 2. * a + 1.);
+  float m = smoothstep(-e, e, p.x - wave);
+  vec2 seedB = vec2(-.62 * min(uAspect, 1.5) + .06 * sin(a), -.34 + .08 * cos(a)), seedP = vec2(.62 * min(uAspect, 1.5) + .06 * cos(a), .34 + .08 * sin(a));
+  return vec2(m, 1.);
+}`;
+
+// ---------- background: paper, black and the dark surround ----------
+const VSQ = `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
+const bgMat = new THREE.ShaderMaterial({
+  vertexShader: VSQ, depthTest: false, depthWrite: false, uniforms: { uAspect: { value: 1 }, uTh: { value: 0 }, uRT: { value: new THREE.Vector2(1, 1) } },
+  fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; ${MASK}
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  void main(){
+    vec2 p = (vUv * 2. - 1.) * vec2(uAspect, 1.), px = vUv * uRT;
+    vec2 yy = yinyang(p);
+    float fib = vn(px * vec2(.9, .08)) * .5 + vn(px * vec2(.07, 1.1)) * .5, cloud = vn(px * .004) * .6 + vn(px * .02) * .4;
+    vec3 paper = vec3(.86, .80, .66) * (.93 + .09 * fib + .07 * cloud);
+    vec3 black = vec3(.005, .005, .009) + vec3(.012, .010, .006) * (1. - length(p) * .8);
+    black += vec3(1., .75, .4) * step(.9985, h21(floor(px / 3.))) * .05;                       // a little gold dust in the dark
+    paper *= 1. - .14 * smoothstep(.5, 1.6, length(p));                                           // a touch of vignette so the paper breathes
+    gl_FragColor = vec4(mix(paper, black, yy.x), 1.);
+  }`
+});
+const mkQuad = mat => { const m = new THREE.Mesh(fullscreenTriangle(), mat); m.frustumCulled = false; const s = new THREE.Scene(); s.add(m); return s; };
+const bgScene = mkQuad(bgMat);
+
+// ---------- strands: one geometry, two materials (turbulent ink / calm gold) ----------
+const S = 6000, K = 36, VERTS = S * K * 2;
+const aRnd = new Float32Array(VERTS * 4), aRnd2 = new Float32Array(VERTS * 3), aK = new Float32Array(VERTS), aSide = new Float32Array(VERTS);
+const index = new Uint32Array(S * (K - 1) * 6), R = rng(31337);
+{ let v = 0, ii = 0;
+  for (let s = 0; s < S; s++) { const base = v, a = [R(), R(), R(), R()], b = [R() < 0.07 ? 1 : 0, R(), R()];
+    for (let k = 0; k < K; k++) for (let sd = -1; sd <= 1; sd += 2) { aRnd.set(a, v * 4); aRnd2.set(b, v * 3); aK[v] = k; aSide[v] = sd; v++; }
+    for (let k = 0; k < K - 1; k++) { const a0 = base + k * 2; index.set([a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2], ii); ii += 6; } } }
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(VERTS * 3), 3));
+geo.setAttribute('aRnd', new THREE.BufferAttribute(aRnd, 4)); geo.setAttribute('aRnd2', new THREE.BufferAttribute(aRnd2, 3)); geo.setAttribute('aK', new THREE.BufferAttribute(aK, 1)); geo.setAttribute('aSide', new THREE.BufferAttribute(aSide, 1));
+geo.setIndex(new THREE.BufferAttribute(index, 1));
+
+const common = () => ({ uTh: { value: 0 }, uAspect: { value: 1 }, uRT: { value: new THREE.Vector2(1, 1) }, uPx: { value: 0.002 }, uMouse: { value: new THREE.Vector3(99, 99, 0) } });
+const VERT = good => /* glsl */`
+  attribute vec4 aRnd; attribute vec3 aRnd2; attribute float aK, aSide; uniform float uPx; uniform vec3 uMouse; uniform float uTh, uAspect;
+  varying float vSide, vA; varying vec3 vCol; varying vec2 vP;
+  ${SNOISE3}
+  const float GOOD = ${good ? '1.' : '0.'};
+  vec2 field(vec3 p){
+    // ONE shared flow for both weathers: the ink and the gold ride the very same currents, so the two halves move in step
+    // and every strand crosses the border without a break. Only their look (ink / light) and brightness differ.
+    vec3 o = vec3(cos(uTh), sin(uTh), 0.) * .34;
+    float a = snoise(vec3(p.xy * .28, p.z * .3) + o) * 2.2 + sin(p.x * 1.3 + p.y * .9 + uTh) * .3;
+    vec2 v = vec2(cos(a), sin(a));
+    v += vec2(-p.y, p.x) * .12;                                                       // both sides drift in the same slow circles around the centre
+    vec2 d = p.xy - uMouse.xy; float m = exp(-dot(d, d) * .45);
+    v += (vec2(-d.y, d.x) * 1.15 + d * .35) * m; return normalize(v);
+  }
+  void main(){
+    vec3 p = vec3((aRnd.x - .5) * 10.4, (aRnd.y - .5) * 6.2, (aRnd.z - .5) * 2.6);
+    int kk = int(aK); float stp = .07;
+    for (int i = 0; i < 36; i++) { if (i >= kk) break; p.xy += field(p) * stp; }
+    vec3 tg = vec3(field(p), 0.); mat4 vp = projectionMatrix * viewMatrix;
+    vec4 c0 = vp * vec4(p, 1.), c1 = vp * vec4(p + tg * .05, 1.); vec2 n0 = c0.xy / c0.w, n1 = c1.xy / c1.w;
+    vec2 dir = normalize((n1 - n0) * vec2(uAspect, 1.) + 1e-6), perp = vec2(-dir.y, dir.x) / vec2(uAspect, 1.);
+    float hw = aRnd.w, depth = c0.w, wpx = (.8 + 1.5 * hw * hw) * (7. / depth) * .85;
+    c0.xy += perp * aSide * wpx * uPx * c0.w; gl_Position = c0; vP = (c0.xy / c0.w) * vec2(uAspect, 1.);
+    float pulse = smoothstep(.0, .18, fract(aK / 36. - uTh / 6.2831853 * 2. + aRnd2.z));
+    float ends = smoothstep(0., 5., aK) * smoothstep(36., 28., aK);
+    if (GOOD < .5) {
+      float red = aRnd2.x;
+      vCol = mix(vec3(.004, .006, .018), vec3(.012, .03, .09), aRnd2.y); vCol = mix(vCol, vec3(.80, .058, .022), red);
+      vA = ends * (.30 + .5 * (1. - pulse) * hw + .18 * red) * clamp(1.25 - depth * .06, .35, 1.);
+    } else {
+      float white = step(.93, aRnd2.y);
+      vCol = mix(vec3(1., .70, .30), vec3(1., .88, .58), aRnd2.y) ; vCol = mix(vCol, vec3(1., .97, .90), white) * 1.25;
+      vA = ends * (.04 + .17 * (1. - pulse) * hw + .10 * white) * clamp(1.25 - depth * .06, .4, 1.);
+    }
+    vSide = aSide;
+  }`;
+const FRAG = good => /* glsl */`precision highp float; varying float vSide, vA; varying vec3 vCol; varying vec2 vP; ${MASK}
+  void main(){
+    float e = smoothstep(1., .35, abs(vSide));
+    vec2 yy = yinyang((gl_FragCoord.xy / uRT * 2. - 1.) * vec2(uAspect, 1.));
+    float region = ${good ? 'yy.x' : '(1. - yy.x)'} * yy.y;
+    gl_FragColor = vec4(vCol, vA * e * region);
+  }`;
+const mkMat = good => new THREE.ShaderMaterial({ transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: good ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: common(), vertexShader: VERT(good), fragmentShader: FRAG(good) });
+const inkMat = mkMat(false), goldMat = mkMat(true);
+const ink = new THREE.Mesh(geo, inkMat), gold = new THREE.Mesh(geo, goldMat); ink.frustumCulled = gold.frustumCulled = false;
+const scene = new THREE.Scene(); scene.add(ink, gold);
+const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 60);
+const mats = [bgMat, inkMat, goldMat];
+app.onResize((w, h, dpr) => {
+  post.setSize(w, h, dpr); cam.aspect = w / h; cam.updateProjectionMatrix();
+  const rt = post.scene; mats.forEach(m => { m.uniforms.uAspect.value = w / h; m.uniforms.uRT.value.set(rt.width, rt.height); if (m.uniforms.uPx) m.uniforms.uPx.value = 2 / h; });
+});
+
+const mv = new THREE.Vector3();
+app.start((t) => {
+  const th = TAU * t / DURATION, pt = app.pointer, rr = app.renderer;
+  mats.forEach(m => { m.uniforms.uTh.value = th; });
+  cam.position.set(Math.sin(th) * 0.8, Math.cos(th) * 0.3, 7); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+  mv.set(pt.x, pt.y, 0.5).unproject(cam).sub(cam.position).normalize();
+  const k = -cam.position.z / mv.z; const mx = cam.position.x + mv.x * k, my = cam.position.y + mv.y * k;
+  inkMat.uniforms.uMouse.value.set(mx, my, 0); goldMat.uniforms.uMouse.value.set(mx, my, 0);
+  rr.autoClear = false; rr.setRenderTarget(post.scene); rr.clear();
+  rr.render(bgScene, ORTHO); rr.render(scene, cam); rr.autoClear = true;
+  post.bloomAndComposite(t);
+});
+</script>
+</body>
+</html>

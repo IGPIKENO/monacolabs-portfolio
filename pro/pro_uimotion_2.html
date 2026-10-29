@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gallery Depth · Parallax Rail</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#cfcac2;--fg:#201c17;--mut:#5b554b;--acc2:#a4452a}.hud{text-shadow:none}#cap{position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:5;text-align:center;font:500 12px 'Inter',sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#201c17;pointer-events:none}#cap b{display:block;font:700 22px 'Space Grotesk',sans-serif;letter-spacing:-.01em;text-transform:none;margin-top:4px}</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<div id="cap"><span id="cn"></span><b id="ct"></b></div>
+<script type="module">
+import { createApp, THREE, hud, TAU, DURATION, smoothstep } from './lib/common.js';
+
+hud({ eyebrow: 'Rail of six · procedural works', title: 'Gallery Depth', text: 'Each work is a height map as well as a picture, so the paint sits at different depths and shifts as you move. The rail glides on its own inertia, and the sheets bend with the speed.', tip: 'Scroll, drag or move the cursor' });
+const app = createApp({ label: 'Gallery · 7 meshes', clear: 0xcfcac2, antialias: true });
+const r = app.renderer;
+const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(36, 1, .1, 60); cam.position.set(0, 0, 7.4);
+
+const ART = /* glsl */`
+float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+vec3 art(int id, vec2 uv, out float h){
+  vec2 p = uv * 2. - 1.; vec3 c; h = 0.;
+  if (id == 0) {                                   // Arches
+    float d = length(p * vec2(1., .95) + vec2(0., .55)); float k = floor(d * 5.5); float f = fract(d * 5.5);
+    vec3 pal[4] = vec3[4](vec3(.80, .33, .20), vec3(.95, .86, .70), vec3(.16, .34, .27), vec3(.88, .62, .26)); c = pal[int(mod(k, 4.))]; h = k / 6. + .35 * smoothstep(.0, .12, f) * (1. - smoothstep(.88, 1., f)); c *= .9 + .1 * f;
+  } else if (id == 1) {                            // Dunes
+    c = mix(vec3(.96, .80, .58), vec3(.98, .90, .74), uv.y); h = 0.;
+    for (int i = 0; i < 5; i++) { float fi = float(i); float y = -.55 + fi * .27 + .12 * sin(p.x * (1.6 + fi * .6) + fi * 1.7); float m = smoothstep(.01, -.01, p.y - y); c = mix(c, mix(vec3(.74, .38, .20), vec3(.55, .25, .22), fi / 4.) * (.9 + .12 * sin(p.x * 30.)), m); h = mix(h, .2 + (4. - fi) * .16, m); }
+  } else if (id == 2) {                            // Halftone
+    vec2 g = rot(.45) * p * 11.; vec2 cell = floor(g), f = fract(g) - .5; float tone = .5 + .5 * sin(cell.x * .35 + cell.y * .22) * (1. - uv.y * .4) + (uv.y - .5) * .5; float rad = clamp(tone, 0., 1.) * .62;
+    float dot_ = smoothstep(rad, rad - .08, length(f)); c = mix(vec3(.97, .86, .86), vec3(.78, .13, .33), dot_); h = dot_ * (.35 + .4 * tone);
+  } else if (id == 3) {                            // Sun and horizon
+    c = mix(vec3(.98, .66, .50), vec3(.35, .22, .45), uv.y * .9); float sun = smoothstep(.34, .33, length(p - vec2(0., .1))); float bands = step(.5, fract(p.y * 9.)) * step(p.y, .0);
+    c = mix(c, vec3(1., .90, .60), sun * (1. - .85 * bands * 1.)); float sea = smoothstep(-.02, .0, -p.y - .38 * 0. ); c = mix(c, vec3(.15, .10, .26) * (.8 + .4 * h21(floor(p * vec2(30., 60.)))), step(p.y, -.45)); h = sun * .5 + .05;
+  } else if (id == 4) {                            // Tiles
+    vec2 g = rot(.0) * p * 4.2; vec2 cell = floor(g), f = fract(g) - .5; float rnd = h21(cell); float a = rnd < .5 ? 0. : 1.; vec2 q = a > .5 ? f.yx * vec2(1., -1.) : f;
+    float arc = abs(length(q - .5) - .5); float stripe = smoothstep(.17, .15, arc) + smoothstep(.17, .15, abs(length(q + .5) - .5));
+    c = mix(vec3(.93, .83, .52), vec3(.10, .43, .45), stripe); h = stripe * .6;
+  } else {                                         // Tide
+    c = mix(vec3(.93, .93, .88), vec3(.80, .88, .90), uv.y); h = 0.;
+    for (int i = 0; i < 9; i++) { float fi = float(i); float y = -.8 + fi * .2 + .09 * sin(p.x * 5. + fi * .9) + .05 * sin(p.x * 11. - fi); float line = smoothstep(.035, .0, abs(p.y - y)); c = mix(c, vec3(.06, .22, .42), line * (.55 + .45 * fi / 8.)); h = max(h, line * (.3 + fi * .07)); }
+  }
+  return c;
+}`;
+const VS = /* glsl */`uniform float uVel; varying vec2 vP; varying vec3 vV;
+  void main(){ vec3 pos = position; pos.z += uVel * .2 * (1. - pow(abs(pos.x) / .75, 2.)); pos.x += uVel * .07 * pos.y;
+    vP = position.xy; vec3 camObj = (inverse(modelMatrix) * vec4(cameraPosition, 1.)).xyz; vV = camObj - position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.); }`;
+const FS = /* glsl */`precision highp float; varying vec2 vP; varying vec3 vV; uniform int uId; uniform vec2 uPtr; uniform float uFocus;
+  ${ART}
+  void main(){
+    vec2 ap = abs(vP); vec2 inner = vec2(.64, .9); vec3 col;
+    float edge = max(ap.x - inner.x, ap.y - inner.y);
+    if (edge > 0.) {            // passe-partout: warm paper, with a bevel shadow where the window is cut
+      col = vec3(.93, .91, .86) * (.97 + .03 * h21(vP * 300.)); col *= 1. - .2 * smoothstep(.08, .0, edge) * .6;
+      float rim = smoothstep(.012, .0, edge - .0) ; col = mix(col, vec3(.75, .72, .66), step(edge, .008));
+    } else {
+      vec3 v = normalize(vV); vec2 uv = (vP / inner) * .5 + .5;
+      vec2 off = (v.xy + uPtr * .45) / max(.45, v.z) * .06; float h;
+      // parallax occlusion in three refinement steps against the work's own height map
+      art(uId, uv, h); vec2 uv2 = uv - off * h; art(uId, uv2, h); uv2 = uv - off * h; art(uId, uv2, h); uv2 = uv - off * h;
+      col = art(uId, clamp(uv2, 0., 1.), h);
+      col *= 1. - .35 * smoothstep(-.0, -.12, edge) * 0. - .38 * smoothstep(-.05, .0, edge);          // the cut edge of the window casts a shadow onto the work
+      col *= .86 + .22 * h;
+    }
+    col *= .75 + .25 * uFocus;
+    gl_FragColor = vec4(col, 1.);
+  }`;
+const N = 6, meshes = [], TITLES = ['Arches at Noon', 'Slow Dunes', 'Rose Halftone', 'Sun over Cold Water', 'Quarter Turns', 'Tide Lines'];
+const geo = new THREE.PlaneGeometry(1.5, 2, 28, 1);
+for (let i = 0; i < N; i++) { const m = new THREE.Mesh(geo, new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, side: THREE.DoubleSide, uniforms: { uId: { value: i }, uVel: { value: 0 }, uPtr: { value: new THREE.Vector2() }, uFocus: { value: 1 } } })); m.frustumCulled = false; scene.add(m); meshes.push(m); }
+// background: warm grey wall + a floor line + a soft light
+const bg = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ depthTest: false, depthWrite: false, uniforms: { uAsp: { value: 1 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 1., 1.); }`,
+  fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; uniform float uAsp; float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  void main(){ vec3 wall = mix(vec3(.80, .78, .73), vec3(.88, .86, .81), smoothstep(.0, 1., vUv.y)); float light = smoothstep(1.2, .0, length((vUv - vec2(.5, .62)) * vec2(uAsp, 1.)));
+    vec3 col = wall * (.8 + .3 * light); float floorM = smoothstep(.19, .185, vUv.y); col = mix(col, vec3(.78, .75, .70) * (.86 + .22 * smoothstep(.0, .2, vUv.y)), floorM);
+    col *= 1. - .25 * smoothstep(.6, 1.5, length((vUv - .5) * vec2(uAsp, 1.))); col += (h21(vUv * 900.) - .5) * .02; gl_FragColor = vec4(col, 1.); }` }));
+bg.frustumCulled = false; bg.renderOrder = -1; scene.add(bg);
+app.onResize((w, h) => { cam.aspect = w / h; cam.fov = w / h < 1 ? 52 : 36; cam.updateProjectionMatrix(); bg.material.uniforms.uAsp.value = w / h; });
+
+let user = 0, uvel = 0, down = false, lx = 0;
+const cvs = r.domElement; cvs.addEventListener('wheel', e => { uvel += e.deltaY * .0016; e.preventDefault(); }, { passive: false });
+cvs.addEventListener('pointerdown', e => { down = true; lx = e.clientX; }); addEventListener('pointerup', () => { down = false; });
+addEventListener('pointermove', e => { if (down) { uvel -= (e.clientX - lx) * .012; lx = e.clientX; } });
+const ease = f => f * f * (3 - 2 * f), SLOT = DURATION / N;
+const auto = t => { const k = Math.floor(t / SLOT), f = (t - k * SLOT) / SLOT; return k + ease(smoothstep(.12, .95, f) ); };
+const cn = document.getElementById('cn'), ct = document.getElementById('ct'); let prevT = 0;
+app.start((t, dt) => {
+  if (dt > 0) { user += uvel * dt * 60 * .05; uvel *= Math.exp(-dt * 3.2); }
+  const s = auto(t) + user, vel = (auto(t + .02) - auto(t - .02)) / .04 + uvel * 3;
+  let best = 1e9, bi = 0;
+  for (let i = 0; i < N; i++) {
+    let u = ((i - s + 3) % N + N) % N - 3; const m = meshes[i], x = u * 2.15;
+    m.position.set(x, .1, -Math.pow(Math.abs(u), 1.6) * .32); m.rotation.y = -u * .13; const sc = 1 - Math.min(1, Math.abs(u) * .06); m.scale.setScalar(sc);
+    const mu = m.material.uniforms; mu.uVel.value = Math.max(-1.5, Math.min(1.5, vel)) * .35; mu.uPtr.value.set(app.pointer.x, app.pointer.y); mu.uFocus.value = 1 - Math.min(1, Math.abs(u) * .32);
+    if (Math.abs(u) < best) { best = Math.abs(u); bi = i; }
+  }
+  cam.position.x = app.pointer.x * .35; cam.position.y = app.pointer.y * .18 + .1; cam.lookAt(0, .05, 0);
+  cn.textContent = 'No. ' + String(bi + 1).padStart(2, '0') + ' / 06'; ct.textContent = TITLES[bi];
+  r.setRenderTarget(null); r.render(scene, cam);
+});
+</script>
+</body>
+</html>

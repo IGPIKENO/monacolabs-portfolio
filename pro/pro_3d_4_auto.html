@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Event Horizon · Deep-Space Photograph</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--acc2:#ffb366}
+#snd{position:fixed;right:28px;top:20px;z-index:7;border:1px solid rgba(255,179,102,.4);background:rgba(10,8,6,.6);color:#ffd9b0;font:600 12px 'Inter',sans-serif;letter-spacing:.12em;text-transform:uppercase;padding:9px 16px;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px)}
+#snd:hover{background:#ffd9b0;color:#0a0806}#snd.on{border-color:#ffb366;box-shadow:0 0 18px rgba(255,160,80,.35)}</style>
+</head>
+<body>
+<div id="app"></div>
+<button id="snd" type="button">Sound: off</button>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION } from './lib/common.js';
+import { Post } from './lib/post.js';
+
+hud({ eyebrow: 'Raymarched geodesics · Deep-field imaging', title: 'Event Horizon', text: 'Imaged as a space telescope would see it: every pixel follows a photon through curved space until it is swallowed, flung into the sky or caught on the accretion disc. The shadow at the centre is pure black. Foreground stars carry the six-point diffraction spikes of a segmented mirror; far galaxies are smeared into arcs by the lensing. Sweep the cursor across the centre and the whole picture spirals into the hole.', tip: 'Pass the cursor over the centre to collapse everything · Sound: click for the space synth' });
+
+const DEMO = new URLSearchParams(location.search).has('demo');      // ?demo=1 scripts the collapse (for video / unattended loops)
+const app = createApp({ label: 'Geodesic raymarch', clear: 0x000000 });
+const post = new Post(app.renderer, { scale: 0.62, threshold: 1.0, knee: 0.7, bloomTight: 0.32, bloomWide: 0.3, radius: 1.1, ca: 0.0012, vignette: 0.42, grain: 0.034, exposure: 0.95 });
+
+const VS = `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
+const FS = /* glsl */`
+precision highp float;
+uniform float uAspect, uTh, uCol; uniform vec2 uLook; uniform vec4 uFg[7]; varying vec2 vUv;
+float h31(vec3 p){ p = fract(p * .3183099 + .1); p *= 17.; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+vec3 h33(vec3 p){ return vec3(h31(p), h31(p + 17.3), h31(p + 41.7)); }
+float vn3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3. - 2. * f);
+  return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y), mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float fbm(vec3 p){ float a = .5, s = 0.; for (int i = 0; i < 4; i++) { s += a * vn3(p); p = p * 2.03 + 1.7; a *= .5; } return s; }
+mat2 rot2(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+vec3 starColor(float T){ vec3 warm = vec3(1., .6, .38), mid = vec3(1., .95, .88), cool = vec3(.66, .78, 1.); return T < .5 ? mix(warm, mid, T * 2.) : mix(mid, cool, (T - .5) * 2.); }
+// the sky behind the hole, sampled with the bent ray: dust, stars by magnitude/temperature, and faint distant galaxies that the lens will stretch into arcs
+vec3 sky(vec3 d){
+  vec3 ng = normalize(vec3(.3, .9, .35)); float b = dot(d, ng);
+  vec3 col = vec3(.002, .003, .008) + vec3(.55, .32, .22) * exp(-b * b / .05) * (.012 + .05 * fbm(d * 3. + 2.)) + vec3(.20, .28, .55) * exp(-b * b / .12) * .014 * fbm(d * 5. + 9.);
+  for (int s = 0; s < 3; s++) {
+    float S = s == 0 ? 38. : (s == 1 ? 85. : 160.);
+    vec3 g = d * S + float(s) * 7., id = floor(g), f = fract(g) - .5; vec3 hh = h33(id), hj = h33(id + 9.7);
+    float mag = pow(hh.x, 11.) * 3., dd = length(f - (hj - .5) * .65);
+    if (hh.y < .2 + .25 * exp(-b * b / .08)) col += starColor(hh.z) * (smoothstep(.05 + .04 * mag, 0., dd) * (.25 + mag) + smoothstep(.25, 0., dd) * mag * .04) * (s == 0 ? 1. : .55);
+  }
+  // galaxies: elongated warm / blue blobs in sparse cells
+  { vec3 g = d * 55. + 31., id = floor(g), f = fract(g) - .5; vec3 hh = h33(id), hj = h33(id + 5.3), ha = normalize(h33(id + 2.1) - .5 + 1e-3);
+    if (hh.x > .93) { vec3 v = f - (hj - .5) * .5; float t = dot(v, ha); float dd = sqrt(dot(v, v) + 9. * t * t); col += mix(vec3(1., .78, .5), vec3(.6, .72, 1.), hh.y) * smoothstep(.17, 0., dd) * (.10 + .25 * hh.z) * (.6 + .4 * fbm(v * 20. + id)); } }
+  return col;
+}
+// the accretion disc: temperature falls with radius, differential rotation (whole revolutions per loop), relativistic beaming
+vec3 disc(vec3 hp, vec3 vel){
+  float r = length(hp.xz), phi = atan(hp.z, hp.x);
+  float T = pow(2.7 / r, .7);
+  float x = 12. / pow(r, 1.5), n = floor(x) + smoothstep(.35, .65, fract(x));
+  float ang = phi - uTh * n; vec2 q = vec2(cos(ang), sin(ang)) * r;
+  float tn = fbm(vec3(q * .9, r * 1.6)) * .75 + fbm(vec3(q * 2.8, r * 4. + 3.)) * .35;
+  float rings = .88 + .12 * sin(r * 36. + tn * 6.);
+  float dens = (.3 + 1.3 * tn) * rings * smoothstep(2.6, 3.0, r) * smoothstep(9.2, 5.6, r);
+  vec3 tang = normalize(vec3(-hp.z, 0., hp.x)); float beta = min(.62, .72 / sqrt(max(r - .4, .5)));
+  float D = 1. / (sqrt(1. - beta * beta) * (1. - beta * dot(tang, -vel)));
+  float Td = T * D;
+  vec3 c = vec3(.95, .26, .06); c = mix(c, vec3(1., .62, .26), smoothstep(.35, .9, Td)); c = mix(c, vec3(1., .86, .66), smoothstep(.9, 1.6, Td)); c = mix(c, vec3(.82, .88, 1.), smoothstep(1.7, 2.6, Td));
+  return c * dens * pow(D, 2.6) * (.18 + .7 * T);
+}
+// foreground stars of the instrument, not part of the scene: six diffraction spikes (three lines) plus the two faint horizontal ones of a segmented mirror
+vec3 spikes(vec2 p){
+  vec3 acc = vec3(0.);
+  for (int i = 0; i < 7; i++) {
+    vec4 s = uFg[i]; vec2 d = p - s.xy * vec2(uAspect, 1.); float m = s.z, r = length(d);
+    float core = exp(-r * r * (5000. / (.3 + m))) * m * 2.2 + .0016 * m / (r * r * 40. + .004);
+    float sp = 0.;
+    for (int a = 0; a < 3; a++) { float an = float(a) * 1.0472 + 1.5708; vec2 dir = vec2(cos(an), sin(an)); float along = abs(dot(d, dir)), perp = abs(dot(d, vec2(-dir.y, dir.x))); sp += exp(-perp * 340. / (m + .25)) * exp(-along * (7.5 / (m + .3))); }
+    sp += .3 * exp(-abs(d.y) * 520.) * exp(-abs(d.x) * 9. / (m + .3));
+    acc += starColor(s.w) * (core + sp * .38 * m);
+  }
+  return acc;
+}
+void main(){
+  vec2 p = (vUv * 2. - 1.) * vec2(uAspect, 1.);
+  // collapse: the picture is twisted and sucked toward the centre (uCol 0 -> 1), then fades to nothing
+  float cr = length(p);
+  p = rot2(uCol * uCol * 11. * exp(-cr * .8)) * p * (1. + uCol * uCol * uCol * 20.);
+  float fade = 1. - smoothstep(.5, .97, uCol);
+  float el = .17 + uLook.y * .42 + .035 * sin(uTh), az = uLook.x * .9 + .09 * sin(uTh * 2.);
+  vec3 ro = 27. * vec3(sin(az) * cos(el), sin(el), cos(az) * cos(el));
+  vec3 ww = normalize(-ro), uu = normalize(cross(ww, vec3(0., 1., 0.))), vv = cross(uu, ww);
+  vec3 pos = ro, vel = normalize(p.x * uu + p.y * vv + 3.2 * ww);
+  vec3 hv = cross(pos, vel); float h2 = dot(hv, hv);
+  vec3 col = vec3(0.); float T = 1., ring = 0.; bool swallowed = false;
+  for (int i = 0; i < 150; i++) {
+    float r2 = dot(pos, pos), r = sqrt(r2);
+    if (r < 1.) { swallowed = true; break; }
+    if (r > 45. && dot(pos, vel) > 0.) break;
+    float dt = clamp(.05 * r, .035, 1.2);
+    vel = normalize(vel - 1.5 * h2 * pos / (r2 * r2 * r) * dt);
+    vec3 np = pos + vel * dt;
+    ring += exp(-pow((r - 1.52) * 7., 2.)) * dt;
+    if (pos.y * np.y < 0.) { float f = pos.y / (pos.y - np.y); vec3 hp = mix(pos, np, f); float hr = length(hp.xz); if (hr > 2.6 && hr < 9.4) { col += T * disc(hp, vel); T *= .42; } }
+    pos = np;
+  }
+  if (!swallowed) { col += T * sky(vel); col += vec3(1., .8, .55) * ring * .14 * T; }       // photon ring only for light that escaped: the shadow stays black
+  col += spikes(p);
+  gl_FragColor = vec4(col * fade, 1.);
+}`;
+
+const FG = [[-0.78, 0.5, 1.0, 0.95], [0.86, 0.6, 0.72, 0.15], [0.66, -0.64, 0.85, 0.7], [-0.6, -0.55, 0.5, 0.3], [0.1, 0.84, 0.45, 0.8], [-0.93, -0.12, 0.35, 0.55], [0.4, -0.88, 0.3, 0.2]];
+const mat = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: FS, uniforms: { uAspect: { value: 1 }, uTh: { value: 0 }, uCol: { value: 0 }, uLook: { value: new THREE.Vector2() }, uFg: { value: FG.map(a => new THREE.Vector4(...a)) } }, depthTest: false, depthWrite: false });
+const mesh = new THREE.Mesh(fullscreenTriangle(), mat); mesh.frustumCulled = false;
+const scene = new THREE.Scene(); scene.add(mesh);
+app.onResize((w, h, dpr) => { post.setSize(w, h, dpr); mat.uniforms.uAspect.value = w / h; });
+app.adapt = avg => { if (avg > 1 / 48 && post.p.scale > 0.4) post.setScale(Math.max(0.4, post.p.scale - 0.08)); };
+
+// ---------- collapse: cursor over the centre -> spiral into the hole -> about one second of black -> everything returns ----------
+const ss = x => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); };
+const now = () => performance.now() / 1000;
+const SEQ = DEMO ? [1.3, 1.0, 1.3] : [2.4, 1.1, 1.5];            // spiral in, black, return
+let collapse = null, cool = 0;
+const progress = f => f < 0 ? 0 : f < SEQ[0] ? ss(f / SEQ[0]) : f < SEQ[0] + SEQ[1] ? 1 : f < SEQ[0] + SEQ[1] + SEQ[2] ? 1 - ss((f - SEQ[0] - SEQ[1]) / SEQ[2]) : 0;
+window.__collapseAt = f => { collapse = { t0: now() - f }; };
+// ---------- a procedural space synth (Web Audio, no samples): evolving drone chords, a sub, glassy bells, a slow wind, all through a long reverb ----------
+const synth = (() => {
+  let ctx, master, wet, pitch, padLP, running = false, timer = null, nextChord = 0, nextBell = 0, chordIdx = 0;
+  const CHORDS = [[110, 164.81, 196, 246.94], [87.31, 130.81, 220, 329.63], [130.81, 196, 246.94, 329.63], [98, 146.83, 220, 293.66]];      // Am9, Fmaj7, Cmaj7, Gsus2 (low, slow)
+  const PENT = [440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5];
+  const impulse = sec => { const n = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, n, ctx.sampleRate); for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let lp = 0; for (let i = 0; i < n; i++) { lp += ((Math.random() * 2 - 1) - lp) * 0.35; d[i] = lp * Math.pow(1 - i / n, 3.4); } } return b; };
+  function pad(freq, t, dur) {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.2, t + 4.5); g.gain.setValueAtTime(0.2, t + dur - 5.5); g.gain.linearRampToValueAtTime(0, t + dur);
+    for (const det of [-8, 0, 8]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = freq; o.detune.value = det; pitch.connect(o.detune); o.connect(g); o.start(t); o.stop(t + dur + 0.2); }
+    const s = ctx.createOscillator(); s.type = 'sine'; s.frequency.value = freq * 2; pitch.connect(s.detune); const sg = ctx.createGain(); sg.gain.value = 0.55; s.connect(sg); sg.connect(g); s.start(t); s.stop(t + dur + 0.2);
+    g.connect(padLP);
+  }
+  function bell(t) {
+    const f = PENT[Math.floor(Math.random() * PENT.length)], pan = ctx.createStereoPanner(); pan.pan.value = Math.random() * 1.6 - 0.8;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.09, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0008, t + 6.5);
+    for (const [ratio, amp] of [[1, 1], [2.76, 0.25], [5.4, 0.08]]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f * ratio; const a = ctx.createGain(); a.gain.value = amp; o.connect(a); a.connect(g); o.start(t); o.stop(t + 7); }
+    g.connect(pan); const dry = ctx.createGain(); dry.gain.value = 0.25; pan.connect(dry); dry.connect(master); pan.connect(wet);
+  }
+  function tick() {
+    if (!running) return; const t = ctx.currentTime;
+    while (nextChord < t + 6) { const ch = CHORDS[chordIdx++ % CHORDS.length]; ch.forEach((f, i) => pad(f, nextChord + i * 0.5, 17)); nextChord += 12; }
+    if (t > nextBell) { bell(t + 0.05); nextBell = t + 2.2 + Math.random() * 4.5; }
+  }
+  return {
+    get running() { return running; }, get state() { return ctx ? ctx.state : 'none'; },
+    start() {
+      if (running) return; ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume();
+      master = ctx.createGain(); master.gain.value = 0; const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+      wet = ctx.createGain(); wet.gain.value = 0.95; const conv = ctx.createConvolver(); conv.buffer = impulse(6.5); wet.connect(conv); const wg = ctx.createGain(); wg.gain.value = 0.9; conv.connect(wg); wg.connect(master);
+      pitch = ctx.createConstantSource(); pitch.offset.value = 0; pitch.start();
+      padLP = ctx.createBiquadFilter(); padLP.type = 'lowpass'; padLP.frequency.value = 650; padLP.Q.value = 0.8;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 0.055; const lg = ctx.createGain(); lg.gain.value = 260; lfo.connect(lg); lg.connect(padLP.frequency); lfo.start();
+      const padOut = ctx.createGain(); padOut.gain.value = 0.9; padLP.connect(padOut); padOut.connect(master); const send = ctx.createGain(); send.gain.value = 0.7; padOut.connect(send); send.connect(wet);
+      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 55; const sg = ctx.createGain(); sg.gain.value = 0.11; sub.connect(sg); sg.connect(master); sub.start();
+      // slow wind: looped noise through a drifting band-pass
+      const nb = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate), nd = nb.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      const ns = ctx.createBufferSource(); ns.buffer = nb; ns.loop = true; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 0.6;
+      const wl = ctx.createOscillator(); wl.frequency.value = 0.03; const wlg = ctx.createGain(); wlg.gain.value = 500; wl.connect(wlg); wlg.connect(bp.frequency); wl.start();
+      const wgn = ctx.createGain(); wgn.gain.value = 0.028; ns.connect(bp); bp.connect(wgn); wgn.connect(master); wgn.connect(wet); ns.start();
+      nextChord = ctx.currentTime + 0.1; nextBell = ctx.currentTime + 1.5; running = true; tick(); timer = setInterval(tick, 250);
+      master.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 3);
+    },
+    stop() { if (!running) return; running = false; clearInterval(timer); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(0, ctx.currentTime, 0.2); setTimeout(() => { try { ctx.close(); } catch (e) {} ctx = null; }, 900); },
+    // the collapse: everything falls in pitch while the filter closes and a riser climbs; silence while it is black; then a deep boom as it all returns
+    collapse(seq) {
+      if (!running) return; const t = ctx.currentTime, [s0, s1, s2] = seq;
+      pitch.offset.cancelScheduledValues(t); pitch.offset.setValueAtTime(pitch.offset.value, t); pitch.offset.linearRampToValueAtTime(-1500, t + s0);
+      padLP.frequency.cancelScheduledValues(t); padLP.frequency.setValueAtTime(650, t); padLP.frequency.exponentialRampToValueAtTime(110, t + s0);
+      const ro = ctx.createOscillator(); ro.type = 'sawtooth'; ro.frequency.setValueAtTime(60, t); ro.frequency.exponentialRampToValueAtTime(1500, t + s0); const rf = ctx.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.setValueAtTime(300, t); rf.frequency.exponentialRampToValueAtTime(5000, t + s0);
+      const rg = ctx.createGain(); rg.gain.setValueAtTime(0, t); rg.gain.linearRampToValueAtTime(0.13, t + s0 * 0.85); rg.gain.linearRampToValueAtTime(0, t + s0); ro.connect(rf); rf.connect(rg); rg.connect(master); rg.connect(wet); ro.start(t); ro.stop(t + s0 + 0.1);
+      master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.setValueAtTime(0.55, t + s0 - 0.2); master.gain.linearRampToValueAtTime(0, t + s0 + 0.2);
+      const tr = t + s0 + s1;
+      pitch.offset.setValueAtTime(-1500, tr - 0.05); pitch.offset.linearRampToValueAtTime(0, tr + s2); padLP.frequency.setValueAtTime(110, tr - 0.05); padLP.frequency.exponentialRampToValueAtTime(650, tr + s2);
+      master.gain.setValueAtTime(0, tr - 0.05); master.gain.linearRampToValueAtTime(0.55, tr + s2 * 0.7);
+      const bo = ctx.createOscillator(); bo.type = 'sine'; bo.frequency.setValueAtTime(70, tr); bo.frequency.exponentialRampToValueAtTime(32, tr + 1.6); const bg = ctx.createGain(); bg.gain.setValueAtTime(0, tr - 0.02); bg.gain.linearRampToValueAtTime(0.6, tr + 0.04); bg.gain.exponentialRampToValueAtTime(0.001, tr + 2.4); bo.connect(bg); bg.connect(master); bg.connect(wet); bo.start(tr); bo.stop(tr + 2.5);
+    }
+  };
+})();
+const sndBtn = document.getElementById('snd');
+sndBtn.addEventListener('click', () => { if (synth.running) { synth.stop(); sndBtn.textContent = 'Sound: off'; sndBtn.classList.remove('on'); } else { synth.start(); sndBtn.textContent = 'Sound: on'; sndBtn.classList.add('on'); } });
+window.__audio = () => ({ running: synth.running, state: synth.state });
+const startCollapse = (f0 = 0) => { collapse = { t0: now() - f0 }; synth.collapse(SEQ); };
+
+const canvas = app.renderer.domElement;
+canvas.addEventListener('pointermove', e => {
+  if (DEMO || collapse || now() < cool) return; const rc = canvas.getBoundingClientRect();
+  const x = ((e.clientX - rc.left) / rc.width * 2 - 1) * (rc.width / rc.height), y = -((e.clientY - rc.top) / rc.height * 2 - 1);
+  if (Math.hypot(x, y) < 0.26) startCollapse();
+});
+
+app.start((t) => {
+  const th = TAU * t / DURATION, pt = app.pointer, u = mat.uniforms, r = app.renderer;
+  let f = -1;
+  if (DEMO) { f = t >= 4.4 ? t - 4.4 : -1; }
+  else if (collapse) { f = now() - collapse.t0; if (f > SEQ[0] + SEQ[1] + SEQ[2]) { collapse = null; cool = now() + 0.8; f = -1; } }
+  u.uTh.value = th; u.uLook.value.set(f >= 0 ? 0 : pt.x, f >= 0 ? 0 : pt.y); u.uCol.value = progress(f);
+  r.setRenderTarget(post.scene); r.render(scene, ORTHO);
+  post.bloomAndComposite(t);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Koto Study · Plucked Strings</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#1c0a0b;--fg:#f3e7cf;--mut:#c9b79a;--acc2:#d8a845}</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, hud, TAU, DURATION } from './lib/common.js';
+import { layer, hash } from './lib/c2d.js';
+import { sound, reverb } from './lib/audio.js';
+
+hud({ eyebrow: 'Karplus–Strong · Thirteen strings', title: 'Koto Study', text: 'A burst of noise circulates in a tiny delay line and slowly loses its brightness. That is a plucked string, computed sample by sample. Thirteen strings tuned to the Hirajoshi scale; a score plays itself until you take over.', tip: 'Drag the cursor across the strings to pluck them · Sound: click to hear the koto' });
+const app = createApp({ label: 'Koto · 1 pass', clear: 0x1c0a0b });
+
+// lacquer wood, a soft lamp, glow on the strings
+const L = layer(app, { frag: /* glsl */`
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  void main(){
+    vec2 px = vUv * uRes; vec4 s = texture2D(tC, vUv);
+    vec3 glow = vec3(0.); for (int i = 0; i < 12; i++) { float a = float(i) * .5236; for (int k = 1; k < 3; k++) glow += texture2D(tC, vUv + vec2(cos(a), sin(a)) * float(k) * 5. / uRes).rgb; }
+    glow /= 24.;
+    // wood grain along the instrument (x direction)
+    float grain = vn(vec2(px.x * .004, px.y * .35)) * .6 + vn(vec2(px.x * .02, px.y * 1.7)) * .3 + vn(vec2(px.x * .1, px.y * 5.)) * .1;
+    vec3 wood = mix(vec3(.17, .055, .045), vec3(.30, .10, .07), grain);
+    float lamp = smoothstep(1.3, 0., length((vUv - vec2(.3, .62)) * vec2(uAsp, 1.)));
+    wood *= .55 + .9 * lamp; wood *= 1. - .5 * smoothstep(.5, 1.3, length((vUv - .5) * vec2(uAsp, 1.)));
+    vec3 col = wood * (1. - s.a * .0) + glow * 1.5 * vec3(1., .86, .6);
+    col = mix(col, s.rgb, s.a);
+    col += (h21(px + floor(uTime * 24.)) - .5) * .02;
+    gl_FragColor = vec4(col, 1.);
+  }` });
+
+const NS = 13, HIRA = [293.66, 311.13, 392.0, 440.0, 466.16];   // D, Eb, G, A, Bb  (hirajoshi)
+const freq = i => HIRA[i % 5] * Math.pow(2, Math.floor(i / 5) - 1);
+// score: pluck events inside the 8 s loop {t, string, pos along the string (0..1), strength}
+const SCORE = []; { const seq = [0, 2, 4, 7, 5, 3, 6, 9, 8, 5, 7, 10, 12, 9, 7, 4, 2, 0, 3, 6, 4, 1, 2, 0]; seq.forEach((s, i) => SCORE.push({ t: i * (8 / seq.length), s: s % NS, p: .3 + .4 * hash(i, 7), a: .6 + .4 * hash(i, 9) })); }
+const live = [];    // plucks made by the user: {t0 (performance.now()), s, p, a}
+
+// audio: Karplus-Strong rendered once per string, played as buffers
+const snd = sound(); let ac, wetN; const cache = {};
+const ks = (ctx, f) => { if (cache[f]) return cache[f]; const sr = ctx.sampleRate, n = Math.floor(sr * 3.2), buf = ctx.createBuffer(1, n, sr), d = buf.getChannelData(0), N = Math.round(sr / f), line = new Float32Array(N);
+  for (let i = 0; i < N; i++) line[i] = Math.random() * 2 - 1; let k = 0, prev = 0;
+  for (let i = 0; i < n; i++) { const a = line[k], b = line[(k + 1) % N], v = (a + b) * .5 * .9965; line[k] = v; d[i] = a * (1 - i / n); k = (k + 1) % N; } return (cache[f] = buf); };
+const pluckAudio = (s, a, pan) => { if (!snd.on || !ac) return; const src = ac.createBufferSource(); src.buffer = ks(ac, freq(s)); const g = ac.createGain(); g.gain.value = .5 * a; const p = ac.createStereoPanner(); p.pan.value = pan; src.connect(g); g.connect(p); p.connect(snd.out); p.connect(wetN); src.start(); };
+snd.onstart = (ctx) => { ac = ctx; wetN = reverb(ctx, 2.6); const wg = ctx.createGain(); wg.gain.value = .35; wetN.connect(wg); wg.connect(snd.out); };
+
+const strY = (i, H) => H * (.16 + .68 * i / (NS - 1));
+let prevT = 0, prevPy = null, prevPx = null, lastReal = false;
+app.start((t, dt) => {
+  const { ctx } = L; L.begin(); const W = L.w, H = L.h, x0 = W * .05, x1 = W * .95, ptr = app.pointer;
+  // virtual score → audio only when the playhead of the loop crosses an event (never when seeking backward)
+  if (t >= prevT) SCORE.forEach(e => { if (e.t > prevT && e.t <= t && !ptr.real) pluckAudio(e.s, e.a, (e.s / (NS - 1)) * 1.4 - .7); }); prevT = t;
+  // real pointer: a pluck whenever the cursor crosses a string
+  const py = (1 - (ptr.y * .5 + .5)) * H, pxx = (ptr.x * .5 + .5) * W;
+  if (ptr.real && prevPy !== null && lastReal) for (let i = 0; i < NS; i++) { const y = strY(i, H); if ((prevPy - y) * (py - y) < 0 && pxx > x0 && pxx < x1) { const sp = Math.min(1, Math.abs(py - prevPy) / (H * .06) + .3); live.push({ t0: performance.now(), s: i, p: (pxx - x0) / (x1 - x0), a: sp }); pluckAudio(i, sp, (i / (NS - 1)) * 1.4 - .7); } }
+  prevPy = py; prevPx = pxx; lastReal = ptr.real; const nowMs = performance.now(); while (live.length && nowMs - live[0].t0 > 4000) live.shift();
+  // bridges (kotoji): a diagonal row of ivory bridges, one per string
+  const bridgeX = i => x0 + (x1 - x0) * (.18 + .62 * (i / (NS - 1)));
+  const disp = (i, x) => {          // vertical displacement of string i at screen x: sum of damped modes from every recent pluck
+    const bx = bridgeX(i), L0 = x0, Lw = bx - L0; if (x > bx) return 0; const u = (x - L0) / Lw; let y = 0;
+    const add = (age, p, a) => { if (age < 0 || age > 4) return; const env = a * Math.exp(-age * 1.7);
+      for (let m = 1; m <= 3; m++) { const w = TAU * (3.2 + i * .35) * m * .5, shape = Math.sin(m * Math.PI * u) * Math.sin(m * Math.PI * p) / (m * m * Math.max(.05, p * (1 - p)) * 4); y += env * shape * Math.sin(w * age); } };
+    SCORE.forEach(e => { if (e.s !== i) return; for (let k = -1; k <= 0; k++) add(t - (e.t + k * DURATION), e.p, e.a); });
+    live.forEach(e => { if (e.s === i) add((nowMs - e.t0) / 1000, e.p, e.a); });
+    return y * H * .042;
+  };
+  // strings
+  for (let i = 0; i < NS; i++) {
+    const y0 = strY(i, H), bx = bridgeX(i), thick = 1.2 + (NS - i) * .16;
+    ctx.beginPath(); for (let k = 0; k <= 160; k++) { const x = x0 + (bx - x0) * k / 160, yy = y0 + disp(i, x); k ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); }
+    ctx.strokeStyle = '#f6ecd4'; ctx.lineWidth = thick; ctx.lineCap = 'round'; ctx.stroke();
+    // silk wrapping at the head, ivory bridge, number
+    ctx.fillStyle = '#d8a845'; ctx.fillRect(x0 - 2, y0 - 5, 7, 10);
+    ctx.fillStyle = '#efe3c4'; ctx.beginPath(); ctx.moveTo(bx - 6, y0 + 12); ctx.lineTo(bx + 6, y0 + 12); ctx.lineTo(bx, y0 - 11); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(243,231,207,.55)'; ctx.font = '500 10px "Space Grotesk", sans-serif'; ctx.textAlign = 'left'; ctx.fillText(String(i + 1).padStart(2, '0'), bx + 12, y0 + 3);
+  }
+  // body edges
+  ctx.strokeStyle = 'rgba(216,168,69,.7)'; ctx.lineWidth = 2; ctx.strokeRect(x0 - 14, strY(0, H) - 28, x1 - x0 + 28, strY(NS - 1, H) - strY(0, H) + 56);
+  L.render(t);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prism Optics · White Light Split</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#d8dee4;--fg:#14202c;--mut:#4e5d6c;--acc2:#2d5fa8}.hud{text-shadow:none}#nn{position:fixed;right:28px;top:20px;z-index:5;font:500 12px 'Inter',monospace;letter-spacing:.08em;color:#14202c;text-align:right}</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<div id="nn"></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION } from './lib/common.js';
+
+hud({ eyebrow: 'Dispersion · Snell’s law per wavelength', title: 'Prism Optics', text: 'One white ray enters a glass prism. Glass bends short wavelengths more than long ones, so each of the twenty-four colours is traced through the prism separately with its own index of refraction and leaves at its own angle.', tip: 'Move the cursor: left and right turns the prism, up and down moves the beam' });
+const app = createApp({ label: 'Prism · 1 pass', clear: 0xd8dee4 });
+const r = app.renderer, NW = 24;
+
+const mat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  uniforms: { uAsp: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) }, uTri: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] }, uE: { value: new THREE.Vector2() }, uR: { value: Array.from({ length: NW }, () => new THREE.Vector4()) }, uBy: { value: 0 }, uTh: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`,
+  fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; uniform float uAsp, uBy, uTh; uniform vec2 uRes, uE; uniform vec2 uTri[3]; uniform vec4 uR[${NW}];
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  vec3 spec(float x){ // x: 0 violet .. 1 red
+    vec3 c = clamp(vec3(abs(x * 6. - 3.) - 1., 2. - abs(x * 6. - 2.), 2. - abs(x * 6. - 4.)), 0., 1.); c.r += .45 * smoothstep(.2, .0, x) * 1.; c.b += .0; return c * (.88 + .1 * x) * vec3(1., .96, 1.) ; }
+  float sdTri(vec2 p){ float d = -1e9; for (int i = 0; i < 3; i++) { vec2 a = uTri[i], b = uTri[(i + 1) % 3]; vec2 e = b - a, n = normalize(vec2(e.y, -e.x)); d = max(d, dot(p - a, n)); } return d; }
+  float seg(vec2 p, vec2 a, vec2 b){ vec2 pa = p - a, ba = b - a; float h = clamp(dot(pa, ba) / dot(ba, ba), 0., 1.); return length(pa - ba * h); }
+  void main(){
+    vec2 p = (vUv * 2. - 1.) * vec2(uAsp, 1.), px = vUv * uRes;
+    vec3 col = mix(vec3(.74, .79, .84), vec3(.88, .91, .94), smoothstep(-1., 1., p.y * .8 + .2));
+    col *= .86 + .22 * smoothstep(1.3, .0, length(p * vec2(.8, 1.)));
+    float sd = sdTri(p);
+    // soft shadow of the prism on the table
+    col *= 1. - .2 * smoothstep(.12, -.01, sdTri(p + vec2(-.03, .05)));
+    // the incoming white beam (from the left to the entry point)
+    float inB = seg(p, vec2(-3., uBy), uE); float bw = .008 + .004 * sin(uTh);
+    vec3 beam = vec3(0.); float bA = exp(-inB * inB / (bw * bw)) * step(p.x, uE.x + .001) + .35 * exp(-inB * inB / (bw * bw * 18.)) * step(p.x, uE.x);
+    col = mix(col, vec3(1., 1., .99), clamp(bA, 0., 1.));
+    // twenty-four rays: inside the glass (faint) and outside (the fan)
+    for (int i = 0; i < ${NW}; i++) {
+      vec4 R = uR[i]; float k = float(i) / ${NW}.; vec3 sc = spec(1. - k);
+      vec2 X = R.xy, D = R.zw;
+      float s = dot(p - X, D); float d = abs((p.x - X.x) * D.y - (p.y - X.y) * D.x);
+      float sigma = .0045 + max(s, 0.) * .0085;
+      float w = exp(-d * d / (sigma * sigma)) * step(0., s) * (.55 / (1. + max(s, 0.) * .15)) * (sigma > 0. ? .0045 / sigma * 1.6 + .25 : 1.);
+      col = mix(col, sc, clamp(w * .55, 0., 1.));
+      float di = seg(p, uE, X); float wi = exp(-di * di / (.0035 * .0035)) * step(sd, 0.) * .22;
+      col = mix(col, sc, wi);
+    }
+    // glass: tint, a diagonal sheen, bright cut edges and a faint chromatic rim
+    float inside = smoothstep(.003, -.003, sd);
+    vec3 glass = col * vec3(.90, .96, 1.) + vec3(.05, .09, .12);
+    glass += vec3(.10, .12, .15) * smoothstep(.0, -.2, sd) * .0 + vec3(.12) * smoothstep(.0, .6, .5 + .5 * sin((p.x + p.y) * 6. - 1.));
+    col = mix(col, glass, inside * .78);
+    float edge = smoothstep(.007, .0, abs(sd)); col = mix(col, vec3(1.), edge * .9);
+    col += vec3(1., .3, .2) * smoothstep(.012, .0, abs(sd + .004)) * .0;
+    col *= 1. - .22 * smoothstep(.6, 1.7, length(p));
+    col += (h21(px + floor(uTh * 30.)) - .5) * .018;
+    gl_FragColor = vec4(col, 1.);
+  }`
+});
+const mesh = new THREE.Mesh(fullscreenTriangle(), mat); mesh.frustumCulled = false; const scene = new THREE.Scene(); scene.add(mesh);
+app.onResize((w, h) => { mat.uniforms.uAsp.value = w / h; mat.uniforms.uRes.value.set(w, h); });
+
+// --- 2D ray tracing through the prism, one ray per wavelength (Cauchy dispersion, exaggerated for legibility) ---
+const nOf = lam => 1.50 + 0.0042 * 4.2 * (1 / (lam * lam) - 1 / 0.3025);
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1]], dot2 = (a, b) => a[0] * b[0] + a[1] * b[1];
+function refract(d, n, eta) {       // d unit incident, n unit normal facing the incident side; returns null on TIR
+  const c = -dot2(n, d), k = 1 - eta * eta * (1 - c * c); if (k < 0) return null; const f = eta * c - Math.sqrt(k); return [eta * d[0] + f * n[0], eta * d[1] + f * n[1]];
+}
+function hitTri(o, d, V, skip) {     // nearest edge hit {t, n (outward), edge}
+  let best = null;
+  for (let i = 0; i < 3; i++) { if (i === skip) continue; const a = V[i], b = V[(i + 1) % 3], e = sub(b, a), den = d[0] * e[1] - d[1] * e[0]; if (Math.abs(den) < 1e-9) continue;
+    const ao = sub(a, o), t = (ao[0] * e[1] - ao[1] * e[0]) / den, u = (ao[0] * d[1] - ao[1] * d[0]) / den; if (t > 1e-5 && u >= 0 && u <= 1 && (!best || t < best.t)) { const L = Math.hypot(e[0], e[1]); best = { t, n: [e[1] / L, -e[0] / L], edge: i }; } }
+  return best;
+}
+const hudN = document.getElementById('nn');
+app.start((t) => {
+  const th = TAU * t / DURATION, ptr = app.pointer, u = mat.uniforms;
+  const rot = -.5 + ptr.x * .3 + .05 * Math.sin(th), by = .0 + ptr.y * .16 + .03 * Math.sin(2 * th), R0 = .46, cy = -.02;
+  const V = [0, 1, 2].map(i => { const a = Math.PI / 2 + i * TAU / 3 + rot; return [R0 * Math.cos(a), cy + R0 * Math.sin(a)]; });
+  V.forEach((v, i) => u.uTri.value[i].set(v[0], v[1]));
+  let E = null; const origin = [-3, by];
+  const h0 = hitTri(origin, [1, 0], V, -1); if (h0) E = [origin[0] + h0.t, by]; else E = [0, by];
+  u.uE.value.set(E[0], E[1]); u.uBy.value = by; u.uTh.value = th;
+  for (let i = 0; i < NW; i++) {
+    const lam = 0.40 + 0.30 * i / (NW - 1), n = nOf(lam); let d = [1, 0], o = E, X = E, D = [1, 0];
+    if (h0) { let nin = h0.n; if (dot2(nin, d) > 0) nin = [-nin[0], -nin[1]]; let dd = refract(d, nin, 1 / n);
+      if (dd) { let pos = E, skip = h0.edge, bounces = 0; for (; bounces < 4; bounces++) { const h = hitTri(pos, dd, V, skip); if (!h) break; pos = [pos[0] + dd[0] * h.t, pos[1] + dd[1] * h.t]; const no = h.n, out = refract(dd, [-no[0], -no[1]], n);
+          if (out) { X = pos; D = out; break; } const c = dot2(dd, no); dd = [dd[0] - 2 * c * no[0], dd[1] - 2 * c * no[1]]; skip = h.edge; } } }
+    u.uR.value[i].set(X[0], X[1], D[0], D[1]);
+  }
+  const sp = (Math.atan2(u.uR.value[0].w, u.uR.value[0].z) - Math.atan2(u.uR.value[NW - 1].w, u.uR.value[NW - 1].z)) * 180 / Math.PI;
+  hudN.textContent = 'n(violet) ' + nOf(.4).toFixed(3) + '  ·  n(red) ' + nOf(.7).toFixed(3) + '  ·  fan ' + Math.abs(sp).toFixed(1) + '°';
+  r.setRenderTarget(null); r.render(scene, ORTHO);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deep Currents · GPU Streamlines</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--acc2:#5be3d2}</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, rng, TAU, DURATION } from './lib/common.js';
+import { Post } from './lib/post.js';
+import { SNOISE3 } from './lib/glsl-noise.js';
+
+hud({ eyebrow: 'WebGL · GPU streamlines · Underwater', title: 'Deep Currents', text: 'Six thousand threads of light carried by a living 3D current that runs in every direction. Three whirlpools orbit on their own, and every spot your cursor crosses leaves a whirlpool that fades slowly: move and the threads curl into circles, spirals and knots. The water closes into black like open space.', tip: 'Draw circles with the cursor' });
+
+const app = createApp({ label: 'GPU streamlines', clear: 0x02202e });
+const r = app.renderer;
+const post = new Post(r, { threshold: 1.1, knee: 0.7, bloomTight: 0.15, bloomWide: 0.25, radius: 1.1, ca: 0.0016, vignette: 0.5, grain: 0.02, exposure: 1.1 });
+
+// ---------- water: depth gradient, caustics, god rays and marine snow (all loop-periodic) ----------
+const VSQ = `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
+const seaMat = new THREE.ShaderMaterial({
+  vertexShader: VSQ, depthTest: false, depthWrite: false, uniforms: { uAspect: { value: 1 }, uTh: { value: 0 }, uM: { value: new THREE.Vector2() } },
+  fragmentShader: /* glsl */`uniform float uAspect, uTh; uniform vec2 uM; varying vec2 vUv;
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  // caustic network: domain-warped sines with integer time harmonics => seamless 8 s loop
+  float caustic(vec2 p){
+    vec2 q = p;
+    for (int i = 0; i < 3; i++) { float f = float(i + 1); q += vec2(sin(q.y * 1.7 * f + uTh * f + f), cos(q.x * 1.5 * f - uTh * f + f * 2.)) * (.42 / f); }
+    float w = sin(q.x * 2.7) + sin(q.y * 2.3) + sin((q.x + q.y) * 1.9);
+    return pow(1. - abs(w) / 3., 9.);
+  }
+  void main(){
+    vec2 uv = vUv, p = (vUv - .5) * vec2(uAspect, 1.);
+    float depth = 1. - uv.y;                                       // 0 at the surface, 1 at the bottom
+    // water body in Pantone Classic Blue 19-4052 (Color of the Year 2020), lightening to turquoise near the surface
+    vec3 col = mix(vec3(.010, .115, .165), vec3(.008, .052, .150), smoothstep(0., .45, depth));
+    col = mix(col, vec3(.000, .012, .050), smoothstep(.35, 1., depth));
+    // sunlight shafts from the surface
+    float sway = sin(uv.y * 3. + uTh) * .08 + sin(uv.y * 7. - uTh * 2.) * .03;
+    float rays = pow(max(0., sin((uv.x + sway + uM.x * .03) * 22. + sin(uv.x * 5. + uTh) * 1.5)), 5.) * pow(max(0., sin((uv.x - sway) * 9. + 1.3)), 2.);
+    col += vec3(.20, .50, .52) * rays * smoothstep(.15, 1., uv.y) * .11 * (1. - depth * .5);
+    // caustics, strongest near the surface
+    float c = caustic(p * 3.2 + uM * .1) * .8 + caustic(p * 5.5 + 3.1) * .35;
+    col += vec3(.18, .62, .72) * c * smoothstep(.25, 1., uv.y) * .15;
+    // marine snow drifting upward: y moves exactly one cell per loop
+    vec2 g = vec2(uv.x * uAspect, uv.y) * vec2(70., 40.); g.y -= uTh / 6.2831853 * 40.;
+    vec2 id = floor(g), f = fract(g) - .5; float h = h21(id), off = h21(id + 7.7) - .5;
+    float flake = smoothstep(.13, .0, length(f - vec2(off, h - .5) * .5)) * step(.9, h);
+    col += vec3(.5, .8, .85) * flake * (.12 + .5 * (1. - depth)) * .6;
+    col *= .42; col *= mix(1., .06, smoothstep(.2, .95, length(p * vec2(.85, 1.))));      // deeper water, with black closing in toward the edges like open space
+    // just a few stars, glimpsed through the water (sparse cells, slow periodic twinkle)
+    vec2 sg = vec2(uv.x * uAspect, uv.y) * vec2(9., 6.), sid = floor(sg), sf = fract(sg) - .5; float sh = h21(sid + 41.), sj = h21(sid * 1.9 + 7.);
+    float star = step(.9, sh) * smoothstep(.04, .0, length(sf - (vec2(sj, h21(sid + 3.3)) - .5) * .6));
+    col += vec3(.80, .88, 1.) * star * (.30 + .16 * sin(uTh * floor(1. + sj * 3.) + sh * 90.)) * smoothstep(.15, .7, uv.y);
+    gl_FragColor = vec4(col, 1.);
+  }`
+});
+const mkQuad = mat => { const m = new THREE.Mesh(fullscreenTriangle(), mat); m.frustumCulled = false; const s = new THREE.Scene(); s.add(m); return s; };
+const seaScene = mkQuad(seaMat);
+
+// ---------- strands: ribbons, one pass ----------
+const S = 6000, K = 36, VERTS = S * K * 2;
+const aRnd = new Float32Array(VERTS * 4), aRnd2 = new Float32Array(VERTS * 3), aK = new Float32Array(VERTS), aSide = new Float32Array(VERTS);
+const index = new Uint32Array(S * (K - 1) * 6), R = rng(31337);
+{ let v = 0, ii = 0;
+  for (let s = 0; s < S; s++) { const base = v, a = [R(), R(), R(), R()], b = [R() < 0.06 ? 1 : 0, R(), R()];
+    for (let k = 0; k < K; k++) for (let sd = -1; sd <= 1; sd += 2) { aRnd.set(a, v * 4); aRnd2.set(b, v * 3); aK[v] = k; aSide[v] = sd; v++; }
+    for (let k = 0; k < K - 1; k++) { const a0 = base + k * 2; index.set([a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2], ii); ii += 6; } } }
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(VERTS * 3), 3));
+geo.setAttribute('aRnd', new THREE.BufferAttribute(aRnd, 4)); geo.setAttribute('aRnd2', new THREE.BufferAttribute(aRnd2, 3)); geo.setAttribute('aK', new THREE.BufferAttribute(aK, 1)); geo.setAttribute('aSide', new THREE.BufferAttribute(aSide, 1));
+geo.setIndex(new THREE.BufferAttribute(index, 1));
+
+const lineMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, depthTest: false, side: THREE.DoubleSide, blending: THREE.NormalBlending,   // ribbon winding flips with line direction; normal blending so crowded spots never burn out to white
+  uniforms: { uTh: { value: 0 }, uAspect: { value: 1 }, uPx: { value: 0.002 }, uMouse: { value: new THREE.Vector3(99, 99, 0) }, uTrail: { value: Array.from({ length: 10 }, () => new THREE.Vector4(99, 99, 0, 1)) } },
+  vertexShader: /* glsl */`
+  attribute vec4 aRnd; attribute vec3 aRnd2; attribute float aK, aSide; uniform float uTh, uAspect, uPx; uniform vec3 uMouse; uniform vec4 uTrail[10];
+  varying float vSide, vA; varying vec3 vCol;
+  ${SNOISE3}
+  vec2 field(vec3 p){
+    vec3 o = vec3(cos(uTh), sin(uTh), 0.) * .26;
+    float a = snoise(vec3(p.xy * .30, p.z * .3) + o) * 2.0 + sin(p.x * .9 + p.y * .7 + uTh) * .28;
+    vec2 v = vec2(cos(a), sin(a));                                       // the current runs in every direction
+    // three slow whirlpools orbit on their own (integer harmonics of the loop)
+    for (int j = 1; j <= 3; j++) { float fj = float(j); vec2 c = vec2(sin(uTh * fj + fj * 2.1) * 3.2, cos(uTh * (fj + 1.) + fj) * 1.8); vec2 dd = p.xy - c; v += vec2(-dd.y, dd.x) * .38 * exp(-dot(dd, dd) * .35) * (mod(fj, 2.) < .5 ? -1. : 1.); }
+    // every spot the cursor has passed over keeps a whirlpool that fades with time: moving draws circles and spirals
+    for (int i = 0; i < 10; i++) { vec4 tr = uTrail[i]; vec2 dd = p.xy - tr.xy; float m = exp(-dot(dd, dd) * tr.w) * tr.z; v += (vec2(-dd.y, dd.x) * 1.0 + dd * .18) * m; }
+    return normalize(v);
+  }
+  void main(){
+    vec3 p = vec3((aRnd.x - .5) * 10.4, (aRnd.y - .5) * 6.2, (aRnd.z - .5) * 2.6);
+    int kk = int(aK);
+    for (int i = 0; i < 36; i++) { if (i >= kk) break; p.xy += field(p) * .055; }
+    vec3 tg = vec3(field(p), 0.);
+    mat4 vp = projectionMatrix * viewMatrix;
+    vec4 c0 = vp * vec4(p, 1.), c1 = vp * vec4(p + tg * .05, 1.);
+    vec2 n0 = c0.xy / c0.w, n1 = c1.xy / c1.w;
+    vec2 dir = normalize((n1 - n0) * vec2(uAspect, 1.) + 1e-6), perp = vec2(-dir.y, dir.x) / vec2(uAspect, 1.);
+    float hw = aRnd.w, depth = c0.w;
+    float wpx = (.9 + 1.7 * hw * hw) * (7. / depth) * .8;
+    c0.xy += perp * aSide * wpx * uPx * c0.w;
+    gl_Position = c0;
+    // threads of light: aqua/white foam, a few warm coral ones; deeper threads sink into the blue
+    float coral = aRnd2.x;
+    vec3 foam = mix(vec3(.42, .68, .76), vec3(.76, .88, .90), aRnd2.y);
+    foam = mix(foam, vec3(.12, .30, .66), step(aRnd2.y, .28));                  // a third of the threads glow in a soft Classic Blue (Pantone 2020)
+    vCol = mix(foam, vec3(.78, .46, .40), coral);
+    float sink = clamp((depth - 6.2) * .35, 0., .85);
+    vCol = mix(vCol, vec3(.04, .30, .55), sink);
+    float pulse = smoothstep(.0, .18, fract(aK / 36. - uTh / 6.2831853 * 2. + aRnd2.z));
+    float ends = smoothstep(0., 5., aK) * smoothstep(36., 28., aK);
+    vA = ends * (.08 + .17 * (1. - pulse) * hw + .04 * coral) * (1. - sink * .6);
+    vSide = aSide;
+  }`,
+  fragmentShader: `varying float vSide, vA; varying vec3 vCol; void main(){ float e = smoothstep(1., .35, abs(vSide)); gl_FragColor = vec4(vCol, vA * e); }`
+});
+const lines = new THREE.Mesh(geo, lineMat); lines.frustumCulled = false;
+const scene = new THREE.Scene(); scene.add(lines);
+const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 60);
+
+app.onResize((w, h, dpr) => {
+  post.setSize(w, h, dpr); cam.aspect = w / h; cam.updateProjectionMatrix();
+  lineMat.uniforms.uAspect.value = w / h; lineMat.uniforms.uPx.value = 2 / h; seaMat.uniforms.uAspect.value = w / h;
+});
+
+const mv = new THREE.Vector3(), hist = [];
+app.start((t) => {
+  const th = TAU * t / DURATION, pt = app.pointer, u = lineMat.uniforms, rr = app.renderer;
+  u.uTh.value = th; seaMat.uniforms.uTh.value = th; seaMat.uniforms.uM.value.set(pt.x, pt.y);
+  // gentle swell: the camera bobs like a diver holding still
+  cam.position.set(Math.sin(th) * 0.9, Math.cos(th) * 0.35 + Math.sin(th * 2) * 0.12, 7); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+  mv.set(pt.x, pt.y, 0.5).unproject(cam).sub(cam.position).normalize();
+  const k = -cam.position.z / mv.z; u.uMouse.value.set(cam.position.x + mv.x * k, cam.position.y + mv.y * k, 0);
+  // whirlpool trail: with a real cursor it is its recent path; unattended, a looping figure drawn by a virtual cursor (a function of t, so seek is exact)
+  const HALF = Math.tan(THREE.MathUtils.degToRad(20)) * 7, T = u.uTrail.value;
+  if (pt.real) {
+    const now = performance.now() / 1000, q = u.uMouse.value;
+    if (!hist.length || Math.hypot(q.x - hist[0].x, q.y - hist[0].y) > 0.22) hist.unshift({ x: q.x, y: q.y, t: now, s: 0 });
+    if (hist.length > 10) hist.length = 10;
+    if (hist.length > 1) hist[0].s = Math.min(0.85, Math.hypot(hist[0].x - hist[1].x, hist[0].y - hist[1].y) / Math.max(0.03, hist[0].t - hist[1].t) * 0.2);
+    for (let i = 0; i < 10; i++) { const h = hist[i]; if (h) T[i].set(h.x, h.y, h.s * Math.exp(-(now - h.t) / 1.5), 1.0); else T[i].set(99, 99, 0, 1); }
+  } else {
+    hist.length = 0;
+    const path = s => { const a = TAU * s / DURATION; return [(0.6 * Math.sin(a * 2) + 0.22 * Math.sin(a * 5 + 1)) * cam.aspect * HALF, (0.42 * Math.cos(a * 3) + 0.15 * Math.sin(a * 7)) * HALF]; };
+    for (let i = 0; i < 10; i++) { const s0 = path(t - i * 0.16), s1 = path(t - i * 0.16 - 0.05), sp = Math.hypot(s0[0] - s1[0], s0[1] - s1[1]) / 0.05; T[i].set(s0[0], s0[1], Math.min(0.8, sp * 0.18) * Math.exp(-i * 0.16 / 1.3), 1.0); }
+  }
+  rr.autoClear = false; rr.setRenderTarget(post.scene); rr.clear();
+  rr.render(seaScene, ORTHO); rr.render(scene, cam); rr.autoClear = true;
+  post.bloomAndComposite(t);
+});
+</script>
+</body>
+</html>

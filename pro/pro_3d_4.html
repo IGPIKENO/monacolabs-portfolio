@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Matryoshka Moon · Nested Phases</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>
+:root{--acc2:#cfd8ff}
+#reset{position:fixed;right:28px;top:20px;z-index:7;border:1px solid rgba(200,215,255,.35);background:rgba(8,12,30,.6);color:#dfe6ff;font:600 12px 'Inter',sans-serif;letter-spacing:.12em;text-transform:uppercase;padding:9px 16px;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px)}
+#reset:hover{background:#dfe6ff;color:#080b22}
+.ph{position:fixed;right:28px;top:62px;z-index:7;display:flex;flex-direction:column;align-items:flex-end;gap:3px;font:500 11px 'Inter',sans-serif;color:#8f9bc4;letter-spacing:.08em}
+.phases{position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:7;display:flex;gap:6px;padding:6px 8px;border-radius:999px;background:rgba(8,12,30,.55);border:1px solid rgba(200,215,255,.18);backdrop-filter:blur(6px)}
+.phases button{all:unset;cursor:pointer;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;opacity:.55;transition:opacity .2s,box-shadow .2s}
+.phases button:hover{opacity:1}
+.phases button.on{opacity:1;box-shadow:0 0 0 2px rgba(200,215,255,.7)}
+.phases button.lock{box-shadow:0 0 0 2px #ffd27a}
+.phases svg{width:24px;height:24px;display:block}
+#bang{position:fixed;inset:0;z-index:9;background:#fff;opacity:0;pointer-events:none}
+#knife{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}
+#knife line{stroke:rgba(255,255,255,.9);stroke-width:1.5;stroke-linecap:round;filter:drop-shadow(0 0 5px rgba(190,210,255,.95))}
+@media (max-width:640px){.phases{top:auto;bottom:16px;transform:translateX(-50%) scale(.85)}.ph{display:none}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="bang"></div>
+<svg id="knife"><line id="kl" x1="0" y1="0" x2="0" y2="0" opacity="0"/></svg>
+<div class="phases" id="phases" aria-label="Moon phases"></div>
+<button id="reset" type="button">Reset</button>
+<div class="ph" id="ph"></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION } from './lib/common.js';
+import { Post } from './lib/post.js';
+
+const DEMO = new URLSearchParams(location.search).has('demo');       // ?demo=1 (or pro_3d_4_auto.html) scripts the cuts for unattended loops and video
+hud({ eyebrow: 'WebGL · Procedural moon · Procedural galaxy', title: 'Matryoshka Moon', text: 'A procedural moon (maria, craters of every size, bright ray systems) that spins on its tilted axis while a sunlight vector walks it through all eight phases. Pass the cursor straight across its body to slice it: inside waits a smaller moon in another phase, and inside that one, another. Click a phase above to hold it.', tip: 'Sweep the cursor across the moon to cut it · click a phase to hold it · R to reset' });
+
+const app = createApp({ label: 'Procedural moon', clear: 0x02030a });
+const r = app.renderer;
+const post = new Post(r, { threshold: 1.0, knee: 0.7, bloomTight: 0.32, bloomWide: 0.5, ca: 0.0005, vignette: 0.45, grain: 0.02, exposure: 0.95 });
+
+const LV = 4, RAD = [1.75, 1.18, 0.80, 0.52];
+document.getElementById('ph').innerHTML = Array.from({ length: LV }, (_, i) => `<span id="pn${i}" style="opacity:.35"></span>`).join('');
+
+// ---------- the eight phases ----------
+// The light vector is L = (-sin a, .12, cos a): a = 0 full moon (light from behind the camera), a = pi new moon.
+// Lit on the right (L.x > 0) = waxing, lit on the left = waning (northern-hemisphere view).
+const PHASES = [['Full moon', 0], ['Waning gibbous', Math.PI / 4], ['Last quarter', Math.PI / 2], ['Waning crescent', 3 * Math.PI / 4], ['New moon', Math.PI], ['Waxing crescent', 5 * Math.PI / 4], ['First quarter', 3 * Math.PI / 2], ['Waxing gibbous', 7 * Math.PI / 4]];
+const phaseName = a => { const x = ((a % TAU) + TAU) % TAU; let best = 0, bd = 9; PHASES.forEach((p, i) => { const d = Math.min(Math.abs(x - p[1]), TAU - Math.abs(x - p[1])); if (d < bd) { bd = d; best = i; } }); return PHASES[best][0]; };
+const phaseSVG = a => {
+  const c = Math.cos(a), right = Math.sin(a) < 0, R = 10, rx = Math.abs(c) * R; let lit = '';
+  if (c > 0.985) lit = `<circle r="${R}" fill="#e9ecf7"/>`;
+  else if (c > -0.985) lit = `<path fill="#e9ecf7" d="M0 ${-R}A${R} ${R} 0 0 1 0 ${R}A${rx.toFixed(2)} ${R} 0 0 ${c > 0 ? 1 : 0} 0 ${-R}Z" transform="${right ? '' : 'scale(-1 1)'}"/>`;
+  return `<svg viewBox="-12 -12 24 24"><circle r="${R}" fill="#1b2142" stroke="rgba(200,215,255,.35)" stroke-width=".8"/>${lit}</svg>`;
+};
+let lockAlpha = null;
+const phEl = document.getElementById('phases');
+phEl.innerHTML = PHASES.map((p, i) => `<button type="button" data-i="${i}" title="${p[0]}">${phaseSVG(p[1])}</button>`).join('');
+phEl.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; const a = PHASES[+b.dataset.i][1]; lockAlpha = (lockAlpha !== null && Math.abs(lockAlpha - a) < 1e-6) ? null : a; });
+
+// ---------- procedural galaxy ----------
+const VSQ = `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`;
+const bgMat = new THREE.ShaderMaterial({
+  vertexShader: VSQ, depthTest: false, depthWrite: false, uniforms: { uAspect: { value: 1 }, uTh: { value: 0 }, uM: { value: new THREE.Vector2() }, uDim: { value: 1 } },
+  fragmentShader: /* glsl */`precision highp float; uniform float uAspect, uTh, uDim; uniform vec2 uM; varying vec2 vUv;
+  float h31(vec3 p){ p = fract(p * .3183099 + .1); p *= 17.; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  vec3 h33(vec3 p){ return vec3(h31(p), h31(p + 17.3), h31(p + 41.7)); }
+  float vn3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3. - 2. * f);
+    return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y), mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z); }
+  float fbm(vec3 p){ float a = .5, s = 0.; for (int i = 0; i < 5; i++) { s += a * vn3(p); p = p * 2.02 + 3.1; a *= .5; } return s; }
+  mat2 rot(float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+  vec3 starColor(float T){ vec3 warm = vec3(1., .55, .32), mid = vec3(1., .95, .88), cool = vec3(.62, .76, 1.); return T < .5 ? mix(warm, mid, T * 2.) : mix(mid, cool, (T - .5) * 2.); }
+  vec3 stars(vec3 d, float S, float seed, float band, float tw){
+    vec3 g = d * S + seed, id = floor(g), f = fract(g) - .5; vec3 hh = h33(id), hj = h33(id + 9.7);
+    float mag = pow(hh.x, 10.) * 3.2, dens = .2 + .55 * band; if (hh.y > dens) return vec3(0.);
+    float dd = length(f - (hj - .5) * .65), core = smoothstep(.055 + .05 * mag, 0., dd), halo = smoothstep(.28, 0., dd) * mag * .06;
+    float twk = .8 + .2 * sin(uTh * floor(1. + hh.z * 3.) + hh.x * 80.) * tw;
+    return starColor(hh.z) * (core * (.25 + mag) + halo) * twk;
+  }
+  void main(){
+    vec2 p = (vUv - .5) * vec2(uAspect, 1.);
+    vec3 d = normalize(vec3(p * 1.15 + uM * .03, -1.));
+    d.xz = rot(.18 * sin(uTh) + uM.x * .05) * d.xz; d.yz = rot(.10 * cos(uTh)) * d.yz;
+    vec3 ng = normalize(vec3(.34, .9, .22)), gc = normalize(vec3(-.55, .25, -.8));
+    float b = dot(d, ng), core = pow(max(dot(d, gc), 0.), 6.), band = exp(-b * b / .09);
+    vec3 col = mix(vec3(.004, .007, .02), vec3(.012, .009, .03), d.y * .5 + .5);
+    float T = 1.; vec3 em = vec3(0.);
+    for (int i = 0; i < 9; i++) {
+      float s = float(i); vec3 q = d * (2.4 + s * .28) + s * .37;
+      float dn = fbm(q * 1.15), dust = smoothstep(.52, .78, fbm(q * 2.3 + 5.));
+      float bd = exp(-pow(b + (dn - .5) * .2, 2.) / .06), dens = bd * (.12 + 1.15 * smoothstep(.35, .85, dn));
+      vec3 tint = mix(vec3(.42, .55, 1.), vec3(1., .72, .45), clamp(core * 1.4 + (dn - .4), 0., 1.));
+      tint = mix(tint, vec3(1., .3, .5), smoothstep(.62, .82, fbm(q * 3.1 + 9.)) * .6);
+      em += T * dens * tint * .115; T *= exp(-(dust * bd * 1.25 + dens * .06));
+    }
+    col += em * (.55 + 1.4 * core) * (.5 + .5 * T) + vec3(.55, .42, .34) * core * band * .22 * T;
+    col += (stars(d, 40., 1., band, .6) + stars(d, 75., 6., band, .8) * .7 + stars(d, 130., 13., band, 1.) * .55) * T;
+    gl_FragColor = vec4(col * uDim, 1.);
+  }`
+});
+const mkQuad = mat => { const m = new THREE.Mesh(fullscreenTriangle(), mat); m.frustumCulled = false; const s = new THREE.Scene(); s.add(m); return s; };
+const bgScene = mkQuad(bgMat);
+
+// ---------- procedural moon ----------
+const MOON_FS = /* glsl */`
+precision highp float;
+uniform mat3 uRot; uniform vec3 uL, uN; uniform float uSide, uFlash, uSeed, uCrumble; varying vec3 vL; varying vec3 vW; varying vec3 vN;
+vec3 hash33(vec3 p){ p = vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)), dot(p, vec3(113.5, 271.9, 124.6))); return fract(sin(p) * 43758.5453123); }
+float h31(vec3 p){ p = fract(p * .3183099 + .1); p *= 17.; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vn3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f * f * (3. - 2. * f);
+  return mix(mix(mix(h31(i), h31(i + vec3(1,0,0)), f.x), mix(h31(i + vec3(0,1,0)), h31(i + vec3(1,1,0)), f.x), f.y), mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z); }
+float fbm3(vec3 p){ float a = .5, s = 0.; for (int i = 0; i < 4; i++) { s += a * vn3(p); p = p * 2.03 + 1.7; a *= .5; } return s; }
+// craters: one candidate per Voronoi cell. returns (height, rim brightness, floor mask, ejecta rays). 'dens' lowers the crater count inside the maria.
+vec4 craters(vec3 p, float sc, float seed, float dens){
+  vec3 x = p * sc + seed, n = floor(x), f = fract(x); float f1 = 8.; vec3 id = vec3(0.), bd = vec3(0.);
+  for (int k = -1; k <= 1; k++) for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec3 g = vec3(float(i), float(j), float(k)), o = hash33(n + g); vec3 d = g + o * .8 + .1 - f; float dd = dot(d, d); if (dd < f1) { f1 = dd; id = n + g; bd = d; } }
+  vec3 hh = hash33(id); float d = sqrt(f1), rad = .10 + .17 * hh.x, t = d / rad, on = step(1. - dens, hh.y);
+  float bowl = t < 1. ? -(1. - t * t) : 0., rim = smoothstep(.5, 1., t) * smoothstep(1.6, 1., t);
+  float floorMask = t < .8 ? 1. - t : 0.;
+  float young = step(.82, hh.z), ang = atan(bd.y, bd.x + 1e-4);
+  float rays = young * pow(abs(sin(ang * 9. + hh.z * 60.)), 7.) * smoothstep(1.05, 1.4, t) * exp(-(t - 1.) * .7) * smoothstep(7., 3., t);
+  return vec4((bowl * .75 + rim * .45) * on, rim * on * (1. + young * 1.5), floorMask * on, rays * on);
+}
+// 3D Voronoi edge distance, for the optional shatter
+vec2 vor(vec3 x){ vec3 n = floor(x), f = fract(x); float f1 = 8., f2 = 8.; vec3 id = vec3(0.);
+  for (int k = -1; k <= 1; k++) for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec3 g = vec3(float(i), float(j), float(k)); vec3 d = g + hash33(n + g) - f; float dd = dot(d, d); if (dd < f1) { f2 = f1; f1 = dd; id = n + g; } else if (dd < f2) f2 = dd; }
+  return vec2(sqrt(f2) - sqrt(f1), hash33(id).x); }
+void main(){
+  vec3 P = normalize(uRot * vL);
+  float side = dot(normalize(vL), uN);
+  if (uSide != 0. && side * uSide < 0.) discard;
+  // shatter: cells erode from their borders inward until only dust is left
+  float cr = 0.;
+  if (uCrumble > 0.) { vec2 v = vor(normalize(vL) * 3.4 + uSeed); cr = v.x - uCrumble * (.7 + v.y * .35); if (cr < 0.) discard; }
+  // maria: broad dark seas with soft, irregular coasts
+  float coast = vn3(P * 1.1 + 3. + uSeed) * .65 + vn3(P * 2.6 + 9.) * .25 + vn3(P * 6.) * .1;
+  float maria = smoothstep(.44, .52, coast);
+  float fb = fbm3(P * 14.) * .6 + vn3(P * 60.) * .25 + vn3(P * 140.) * .15;
+  vec4 c1 = craters(P, 3.0, uSeed, mix(.55, .12, maria)), c2 = craters(P, 6.5, uSeed + 11., mix(.62, .2, maria)), c3 = craters(P, 14., uSeed + 23., mix(.62, .3, maria)), c4 = craters(P, 31., uSeed + 37., mix(.6, .4, maria));
+  float h = c1.x + c2.x * .6 + c3.x * .35 + c4.x * .2;
+  vec3 hl = vec3(.52, .50, .46), mr = vec3(.15, .16, .185);                                         // warm highlands, cool grey-blue basalt
+  vec3 alb = mix(hl, mr, maria) * (.62 + .55 * fb) * .8;
+  alb += vec3(.95, .93, .88) * (c1.y * .05 + c2.y * .035 + c3.y * .02) * (1. - maria * .6) + vec3(1., .98, .94) * (c1.w * .2 + c2.w * .1);   // fresh rims and ray systems
+  alb *= 1. - (c1.z * .1 + c2.z * .07) * maria * .8;
+  vec3 N = normalize(vN), V = normalize(cameraPosition - vW);
+  float dif0 = max(dot(N, uL), 0.);
+  // screen-space bump from the crater height, stronger near the terminator (long shadows)
+  vec3 dpx = dFdx(vW), dpy = dFdy(vW); float dhx = dFdx(h), dhy = dFdy(h);
+  vec3 R1 = cross(dpy, N), R2 = cross(N, dpx); float det = dot(dpx, R1);
+  vec3 Nb = normalize(abs(det) * N - sign(det) * (dhx * R1 + dhy * R2) * (.045 + .13 * (1. - dif0)));
+  vec3 col;
+  if (gl_FrontFacing) {
+    float mu0 = max(dot(Nb, uL), 0.), mu = max(dot(N, V), .02);
+    float ls = mu0 / (mu0 + mu * .85);                                                         // Lommel-Seeliger: the full moon looks flat and bright
+    float surge = 1. + .35 * pow(max(dot(V, uL), 0.), 24.);                                    // opposition surge
+    col = vec3(1., .975, .92) * alb * ls * 1.9 * surge * smoothstep(0., .03, dot(N, uL) + .05);
+    col += vec3(.40, .52, .85) * alb * .05;                                                    // earthshine on the night side
+  } else { col = vec3(.24, .28, .42) * alb * .5 + vec3(.01, .012, .03); }
+  float rim = smoothstep(.016, .0, abs(side)) * step(.5, abs(uSide));
+  col += vec3(1., .9, .7) * rim * (1.4 + 6. * uFlash);
+  if (uCrumble > 0.) col += vec3(1., .78, .45) * smoothstep(.06, .0, cr) * 4.5;
+  gl_FragColor = vec4(col, 1.);
+}`;
+const MOON_VS = `varying vec3 vL; varying vec3 vW; varying vec3 vN;
+  void main(){ vL = position; vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * viewMatrix * w; }`;
+const sphere = new THREE.IcosahedronGeometry(1, 42);
+const mkMoon = k => {
+  const mat = new THREE.ShaderMaterial({ vertexShader: MOON_VS, fragmentShader: MOON_FS, side: THREE.DoubleSide,
+    uniforms: { uRot: { value: new THREE.Matrix3() }, uL: { value: new THREE.Vector3(0, 0, 1) }, uN: { value: new THREE.Vector3(0, 1, 0) }, uSide: { value: 0 }, uFlash: { value: 0 }, uSeed: { value: k * 13.7 }, uCrumble: { value: 0 } } });
+  const m = new THREE.Mesh(sphere, mat); m.scale.setScalar(RAD[k]); m.frustumCulled = false; return m;
+};
+const levels = Array.from({ length: LV }, (_, k) => ({ A: mkMoon(k), B: mkMoon(k) }));
+const scene = new THREE.Scene(); levels.forEach(l => scene.add(l.A, l.B));
+const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 50), DIST = 7.4, TANH = Math.tan(THREE.MathUtils.degToRad(20));
+app.onResize((w, h, dpr) => { post.setSize(w, h, dpr); cam.aspect = w / h; cam.updateProjectionMatrix(); bgMat.uniforms.uAspect.value = w / h; });
+
+// ---------- cut state ----------
+// default: driven by the cursor crossing the moon. demo: three scripted slices, then the innermost moon shatters.
+const AUTO_T = [1.0, 2.5, 4.0], AUTO_A = [0.55, 2.25, 1.2, 0], CUT_DUR = 1.6, SHATTER_T = 5.3;
+let cutT = [-1, -1, -1, -1], cutA = [0, 0, 0, 0], resetT = -1, lastAct = 0, cooldown = 0;
+const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const now = () => performance.now() / 1000;
+function levelState(k, t) {
+  if (DEMO) {
+    const rc = ss(6.9, 7.9, t);
+    if (k === LV - 1) return { ang: 0, sep: 0, age: -1, crumble: ss(0, 1, (t - SHATTER_T) / 1.7) * (1 - rc) };
+    return { ang: AUTO_A[k], sep: ss(0, 1, (t - AUTO_T[k]) / CUT_DUR) * (1 - rc), age: t - AUTO_T[k], crumble: 0 };
+  }
+  const T = now(), rc = resetT < 0 ? 0 : ss(0, 1, (T - resetT) / 1.2);
+  if (cutT[k] < 0) return { ang: cutA[k], sep: 0, age: -1, crumble: 0 };
+  return { ang: cutA[k], sep: ss(0, 1, (T - cutT[k]) / CUT_DUR) * (1 - rc), age: T - cutT[k], crumble: 0 };
+}
+function userCut(ang) { const k = cutT.findIndex(v => v < 0); if (k < 0 || resetT >= 0) return; cutT[k] = now(); cutA[k] = ang; lastAct = now(); cooldown = now() + 0.5; }
+function doReset() { if (resetT < 0 && cutT.some(v => v >= 0)) resetT = now(); }
+document.getElementById('reset').onclick = doReset; addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') doReset(); });
+
+// ---------- hover cut: only while the cursor is over the moon's body and moving across it ----------
+// Precision: every sample of the cursor's path across the moon is kept (coalesced events, not just one per frame). The cut direction is the
+// least-squares line through that path, and a guide line through the centre previews the slice before it happens.
+const canvas = app.renderer.domElement, guide = document.getElementById('kl');
+let inside = false, samples = [];
+const toN = e => { const rc = canvas.getBoundingClientRect(); return { x: ((e.clientX - rc.left) / rc.width * 2 - 1) * cam.aspect, y: -((e.clientY - rc.top) / rc.height * 2 - 1) }; };
+const toPx = n => { const rc = canvas.getBoundingClientRect(); return [rc.left + (n.x / cam.aspect * 0.5 + 0.5) * rc.width, rc.top + (0.5 - n.y * 0.5) * rc.height]; };
+const hideGuide = () => guide.setAttribute('opacity', 0);
+function fitAngle(s) {
+  let mx = 0, my = 0; s.forEach(p => { mx += p.x; my += p.y; }); mx /= s.length; my /= s.length;
+  let sxx = 0, syy = 0, sxy = 0; s.forEach(p => { const dx = p.x - mx, dy = p.y - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; });
+  let a = 0.5 * Math.atan2(2 * sxy, sxx - syy); const f = s[0], l = s[s.length - 1];
+  if (Math.cos(a) * (l.x - f.x) + Math.sin(a) * (l.y - f.y) < 0) a += Math.PI;
+  return a;
+}
+canvas.addEventListener('pointermove', e => {
+  if (DEMO || finale) return; const k = cutT.findIndex(v => v < 0); if (k < 0 || resetT >= 0) { inside = false; samples = []; hideGuide(); return; }
+  const rho = RAD[k] / (DIST * TANH), evs = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+  for (const ev of evs) { const n = toN(ev), isIn = Math.hypot(n.x, n.y) < rho * 0.98; if (isIn) { if (!inside) samples = []; samples.push(n); } else if (inside) { samples = []; hideGuide(); } inside = isIn; }
+  if (!inside || samples.length < 3) return;
+  const f = samples[0], l = samples[samples.length - 1], span = Math.hypot(l.x - f.x, l.y - f.y);
+  if (span > rho * 0.18 && now() > cooldown) {
+    const a = fitAngle(samples), c = Math.cos(a), s = Math.sin(a), p0 = toPx({ x: -c * rho * 1.12, y: -s * rho * 1.12 }), p1 = toPx({ x: c * rho * 1.12, y: s * rho * 1.12 });
+    guide.setAttribute('x1', p0[0]); guide.setAttribute('y1', p0[1]); guide.setAttribute('x2', p1[0]); guide.setAttribute('y2', p1[1]); guide.setAttribute('opacity', Math.min(0.9, (span / (rho * 0.55)) * 0.9));
+    if (span > rho * 0.55) { userCut(a); samples = []; inside = false; setTimeout(hideGuide, 160); }
+  }
+});
+canvas.addEventListener('pointerleave', () => { inside = false; samples = []; hideGuide(); });
+
+// ---------- the Big Bang finale: flash, ~1 s of total black, then a vortex of colliding matter that falls back into the moon ----------
+const VN = 70000, vS = new Float32Array(VN * 4), vE = new Float32Array(VN * 3), vPos = new Float32Array(VN * 3);
+for (let i = 0; i < VN; i++) {
+  const u = Math.random(), v = Math.random() * 2 - 1, s = Math.sqrt(1 - v * v), a = u * TAU;
+  vE.set([Math.cos(a) * s, v, Math.sin(a) * s], i * 3);                                     // where this grain lands on the moon's surface
+  const r0 = 2.4 + Math.pow(Math.random(), 0.8) * 5.4, arm = Math.floor(Math.random() * 3);
+  vS.set([r0, arm * TAU / 3 + r0 * 0.85 + (Math.random() - 0.5) * 0.8, Math.random(), Math.random()], i * 4);   // three spiral arms
+}
+const vGeo = new THREE.BufferGeometry(); vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3)); vGeo.setAttribute('aS', new THREE.BufferAttribute(vS, 4)); vGeo.setAttribute('aE', new THREE.BufferAttribute(vE, 3));
+const vortexMat = new THREE.ShaderMaterial({
+  uniforms: { uF: { value: 0 }, uPx: { value: 1 } }, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  vertexShader: /* glsl */`attribute vec4 aS; attribute vec3 aE; uniform float uF, uPx; varying float vA; varying vec3 vC;
+    void main(){
+      float tau = clamp((uF - 1.4) / 3.0, 0., 1.), e = tau * tau * (3. - 2. * tau), k = pow(e, 1.35);
+      float r0 = aS.x, th0 = aS.y, sd = aS.z;
+      vec3 p0 = vec3(cos(th0) * r0, sin(th0) * r0 * .78, (sd - .5) * 1.6), pE = aE * 1.75;
+      vec3 p = mix(p0, pE, k);
+      float ang = 9. * (1. - k) * (1. - .4 * k);                                           // spiral that unwinds as the matter closes in
+      float c = cos(ang), s = sin(ang); p.xy = mat2(c, -s, s, c) * p.xy;
+      // collisions: a fifth of the grains flash when they hit the swirling cloud, at their own moment
+      float tc = .22 + .55 * fract(sd * 37.3), flash = exp(-pow((tau - tc) * 18., 2.)) * step(.955, fract(sd * 91.7));
+      vec4 mv = viewMatrix * vec4(p, 1.); gl_Position = projectionMatrix * mv;
+      gl_PointSize = max(1., uPx * (1.0 + aS.w * 1.1 + flash * 3.2) * 7.4 / -mv.z);
+      vC = mix(vec3(1., .55, .24), vec3(.55, .74, 1.), fract(sd * 13.)) * (1. + flash * 1.6);
+      vA = (uF < 1.3 ? 0. : 1.) * smoothstep(0., .04, tau) * (1. - smoothstep(.9, 1., tau)) * (.5 + flash * .8);
+    }`,
+  fragmentShader: `varying float vA; varying vec3 vC; void main(){ float d = length(gl_PointCoord - .5) * 2.; gl_FragColor = vec4(vC, vA * smoothstep(1., 0., d)); }`
+});
+const vortex = new THREE.Points(vGeo, vortexMat); vortex.frustumCulled = false;
+const vortexScene = new THREE.Scene(); vortexScene.add(vortex);
+let finale = null;                                    // { t0 } while the Big Bang plays
+const bangEl = document.getElementById('bang');
+window.__bangAt = f => { finale = { t0: now() - f }; };   // test hook
+window.__cuts = () => ({ cutT: cutT.slice(), cutA: cutA.slice() });
+
+const n3 = new THREE.Vector3(), tiltM = new THREE.Matrix4(), spinM = new THREE.Matrix4(), rotM = new THREE.Matrix4();
+const btns = [...phEl.querySelectorAll('button')];
+app.start((t) => {
+  const th = TAU * t / DURATION, pt = app.pointer, rr = app.renderer, T = now();
+  if (!DEMO) {
+    if (resetT >= 0 && T - resetT > 1.25) { resetT = -1; cutT = [-1, -1, -1, -1]; finale = null; }
+    else if (!finale && resetT < 0 && cutT[LV - 1] >= 0 && T - cutT[LV - 1] > 1.0) finale = { t0: T };      // the last cut triggers the Big Bang
+    else if (finale && T - finale.t0 > 4.6) { finale = null; cutT = [-1, -1, -1, -1]; resetT = -1; }
+    else if (!finale && resetT < 0 && cutT.some(v => v >= 0) && T - lastAct > 25) resetT = T;
+  }
+  const f = finale ? T - finale.t0 : -1;
+  bgMat.uniforms.uTh.value = th; bgMat.uniforms.uM.value.set(pt.x, pt.y);
+  cam.position.set(pt.x * 0.18, pt.y * 0.12, DIST); cam.lookAt(0, 0, 0); cam.updateMatrixWorld();
+  const st = levels.map((_, k) => levelState(k, t)), a0 = lockAlpha !== null ? lockAlpha : th;
+  levels.forEach((l, k) => {
+    // during the Big Bang every nested moon is gone; the outer moon is rebuilt cell by cell from the vortex (from f = 2.0 s)
+    const s = f >= 0 ? { ang: 0, sep: 0, age: -1, crumble: k === 0 ? 1 - ss(2.3, 4.3, f) : 0 } : st[k];
+    const visible = f >= 0 ? (k === 0 && f > 2.0) : (k === 0 || st[k - 1].sep > 0.05), open = s.sep > 0.002;
+    n3.set(-Math.sin(s.ang), Math.cos(s.ang), 0);
+    tiltM.makeRotationZ(0.32 - k * 0.2); spinM.makeRotationY(th * (k % 2 ? -1 : 1) + k); rotM.multiplyMatrices(tiltM, spinM);   // spin on a tilted axis, one turn per loop
+    const alpha = a0 + k * 1.7;                                                                  // each nested moon is in a different phase
+    for (const [m, sg] of [[l.A, 1], [l.B, -1]]) {
+      const u = m.material.uniforms; u.uRot.value.setFromMatrix4(rotM); u.uN.value.copy(n3); u.uSide.value = open ? sg : 0;
+      u.uL.value.set(-Math.sin(alpha), 0.12, Math.cos(alpha)).normalize();
+      const dist = (1 - Math.pow(1 - s.sep, 4)) * 4.6;                                               // fast out of the cut, long smooth glide away
+      m.position.copy(n3).multiplyScalar(sg * dist); m.rotation.z = sg * s.sep * 0.35;
+      u.uFlash.value = Math.exp(-Math.max(s.age, 0) * 5) * (s.age >= 0 ? 1 : 0); u.uCrumble.value = s.crumble;
+      m.visible = visible && (sg === 1 || open);
+    }
+    const el = document.getElementById('pn' + k); el.textContent = `${k + 1}·${phaseName(alpha)}`; el.style.opacity = visible ? 1 : 0.3;
+  });
+  const cur = PHASES.findIndex(p => p[0] === phaseName(a0)); btns.forEach((b, i) => { b.classList.toggle('on', i === cur); b.classList.toggle('lock', lockAlpha !== null && i === cur); });
+  // sky: dark during the bang, then it swells back in while the moon forms
+  bgMat.uniforms.uDim.value = f < 0 ? 1 : (f < 0.25 ? 1 - ss(0, 0.25, f) : ss(3.4, 4.5, f));
+  bangEl.style.opacity = f < 0 ? 0 : (f < 0.07 ? f / 0.07 : Math.max(0, 1 - (f - 0.07) / 0.4));
+  vortexMat.uniforms.uF.value = f; vortexMat.uniforms.uPx.value = app.size.dpr * app.size.h / 900 * 1.4;
+  rr.autoClear = false; rr.setRenderTarget(post.scene); rr.clear();
+  rr.render(bgScene, ORTHO); rr.render(scene, cam);
+  if (f > 1.3 && f < 4.6) rr.render(vortexScene, cam);
+  rr.autoClear = true;
+  post.bloomAndComposite(t);
+});
+</script>
+</body>
+</html>

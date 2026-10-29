@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contour Relief · Topographic Sheet</title>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<link rel="stylesheet" href="lib/pro.css">
+<style>:root{--bg:#ece5d2;--fg:#2a1d12;--mut:#6a5a46;--acc2:#b4491c}.hud{text-shadow:0 0 12px #ece5d2,0 0 5px #ece5d2}
+#leg{position:fixed;right:30px;top:96px;z-index:5;display:flex;gap:10px;font:500 11px 'Inter',monospace;color:#2a1d12;letter-spacing:.04em}
+#ramp{width:14px;height:240px;border:1px solid #2a1d12;background:linear-gradient(to top,#2f7f93 0 14%,#ede2b9 14% 22%,#c4cf9d 22% 40%,#dcbd80 40% 62%,#c78a5c 62% 82%,#f1e6da 82%)}
+#ticks{display:flex;flex-direction:column;justify-content:space-between;height:240px;text-align:left}
+#lt{position:fixed;right:30px;top:352px;z-index:5;font:600 10px 'Inter';letter-spacing:.14em;text-transform:uppercase;color:#6a5a46;text-align:right;line-height:1.7}</style>
+</head>
+<body class="light">
+<div id="app"></div>
+<div id="leg"><div id="ramp"></div><div id="ticks"><span id="t5"></span><span id="t4"></span><span id="t3"></span><span id="t2"></span><span id="t1"></span><span>0 m</span></div></div>
+<div id="lt">Synthetic elevation model<br>Contour interval <b id="ci"></b><br>Peak <b id="pk"></b></div>
+<script type="module">
+import { createApp, THREE, ORTHO, fullscreenTriangle, hud, TAU, DURATION } from './lib/common.js';
+
+hud({ eyebrow: 'Sheet 07 · Synthetic terrain', title: 'Contour Relief', text: 'A made-up landscape of seven data peaks, cut into contour lines the way a survey sheet does it. The sheet is a solid block: the lines are drawn in the shader with derivative-based antialiasing, and the legend rescales as the peaks rise and fall.', tip: 'Move the cursor to turn and tilt the block' });
+const app = createApp({ label: 'Contour · raymarch', clear: 0xece5d2, maxDpr: 1.25 });
+const r = app.renderer;
+const NG = 7, G = Array.from({ length: NG }, () => new THREE.Vector4());
+const mat = new THREE.ShaderMaterial({
+  depthTest: false, depthWrite: false,
+  uniforms: { uAsp: { value: 1 }, uRes: { value: new THREE.Vector2(1, 1) }, uG: { value: G }, uYaw: { value: 0 }, uPitch: { value: .85 }, uTh: { value: 0 }, uScale: { value: 1 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = position.xy * .5 + .5; gl_Position = vec4(position.xy, 0., 1.); }`,
+  fragmentShader: /* glsl */`precision highp float; varying vec2 vUv; uniform float uAsp, uYaw, uPitch, uTh, uScale; uniform vec2 uRes; uniform vec4 uG[${NG}];
+  const float HS = .62, WL = .17, HALF = 1.6;
+  float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+  float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h21(i), h21(i + vec2(1., 0.)), f.x), mix(h21(i + vec2(0., 1.)), h21(i + 1.), f.x), f.y); }
+  float H(vec2 p){ float h = 0.; for (int i = 0; i < ${NG}; i++) { vec4 g = uG[i]; vec2 d = p - g.xy; h += g.w * exp(-dot(d, d) / (2. * g.z * g.z)); } return (h + .05 * (vn(p * 2.2) + .5 * vn(p * 4.7 + 7.)) - .02) * uScale; }
+  float surf(vec2 p){ return HS * max(H(clamp(p, -HALF, HALF)), WL); }
+  vec3 ramp(float h){
+    vec3 c = vec3(.18, .50, .58);
+    c = mix(c, vec3(.93, .89, .72), smoothstep(WL - .01, WL + .02, h));
+    c = mix(c, vec3(.77, .81, .62), smoothstep(.22, .36, h)); c = mix(c, vec3(.86, .74, .50), smoothstep(.40, .58, h));
+    c = mix(c, vec3(.78, .54, .37), smoothstep(.62, .80, h)); c = mix(c, vec3(.95, .90, .85), smoothstep(.88, 1.06, h)); return c; }
+  void main(){
+    vec2 p = (vUv * 2. - 1.) * vec2(uAsp, 1.);
+    vec3 tgt = vec3(0., 0., .12); float R = 6.3 / max(.8, min(uAsp, 1.4) * .85 + .15);
+    vec3 ro = tgt + R * vec3(sin(uYaw) * cos(uPitch), -cos(uYaw) * cos(uPitch), sin(uPitch));
+    vec3 f = normalize(tgt - ro), rt = normalize(cross(f, vec3(0., 0., 1.))), up = cross(rt, f), rd = normalize(f + (p.x * rt + p.y * up) * .4);
+    // paper
+    vec2 px = vUv * uRes;
+    vec3 col = vec3(.925, .895, .82) * (.95 + .06 * (vn(px * .004) + vn(px * .02) * .5) * .8);
+    // ray vs the block's bounding box
+    float ztop = HS * 1.3; vec3 inv = 1. / rd; vec3 t0 = (vec3(-HALF, -HALF, 0.) - ro) * inv, t1 = (vec3(HALF, HALF, ztop) - ro) * inv;
+    vec3 tmin = min(t0, t1), tmax = max(t0, t1); float tn = max(max(tmin.x, tmin.y), max(tmin.z, 0.)), tf = min(min(tmax.x, tmax.y), tmax.z);
+    // the ground: shadow of the block and a faint graticule on the table
+    float sg = -ro.z / rd.z; vec2 gp = (ro + rd * sg).xy; vec2 q = abs(gp) - HALF; float sdb = length(max(q, 0.)) + min(max(q.x, q.y), 0.);
+    col *= 1. - .38 * smoothstep(.9, -.05, sdb + .15) * (1. - .55 * smoothstep(.0, .35, sdb)) * .9;
+    vec2 gl = abs(fract(gp * 2.5) - .5) / fwidth(gp * 2.5); col = mix(col, vec3(.55, .45, .33), (1. - clamp(min(gl.x, gl.y), 0., 1.)) * .1 * smoothstep(1.4, .3, sdb));
+    if (tn < tf) {
+      float t = tn; bool hit = false; vec3 pos = ro;
+      for (int i = 0; i < 90; i++) { if (t > tf) break; pos = ro + rd * t; float dz = pos.z - surf(pos.xy); if (dz < .0012) { hit = true; break; } t += max(.005, dz * .5); }
+      if (hit) {
+        for (int k = 0; k < 4; k++) { t -= .004; pos = ro + rd * t; }
+        float h = H(clamp(pos.xy, -HALF, HALF)); bool wall = abs(pos.x) > HALF - .012 || abs(pos.y) > HALF - .012;
+        vec3 base, lineC; float f20, f4;
+        if (wall) {
+          float lv = pos.z / HS; base = ramp(lv) * .72; f20 = lv * 20.; f4 = lv * 4.; lineC = vec3(.35, .16, .08);
+          vec3 n = abs(pos.x) > HALF - .012 ? vec3(sign(pos.x), 0., 0.) : vec3(0., sign(pos.y), 0.); base *= .78 + .22 * dot(n, normalize(vec3(-.5, -.6, .3)));
+        } else {
+          float e = .012; vec3 n = normalize(vec3(surf(pos.xy - vec2(e, 0.)) - surf(pos.xy + vec2(e, 0.)), surf(pos.xy - vec2(0., e)) - surf(pos.xy + vec2(0., e)), 2. * e));
+          float lit = dot(n, normalize(vec3(-.55, .5, .65))); base = ramp(h) * (.64 + .52 * clamp(lit, 0., 1.)); f20 = h * 20.; f4 = h * 4.;
+          lineC = h < WL ? vec3(.10, .38, .45) : vec3(.70, .28, .10);
+          if (h < WL) base = mix(vec3(.55, .78, .80), vec3(.12, .42, .52), clamp((WL - h) * 5., 0., 1.)) * (.85 + .2 * clamp(lit, 0., 1.));
+        }
+        float fw = max(fwidth(f20), 1e-4); float l1 = 1. - clamp((abs(fract(f20 - .5) - .5) / fw - .35) * .9, 0., 1.);
+        float fw4 = max(fwidth(f4), 1e-4); float l2 = 1. - clamp((abs(fract(f4 - .5) - .5) / fw4 - .9) * .7, 0., 1.);
+        base = mix(base, lineC, l1 * .62); base = mix(base, lineC * .55, l2 * .85);
+        col = base; float fade = 1. - smoothstep(.0, .05, t - tn - 0.) * 0.; col = mix(col, col * vec3(.97), 0.);
+      }
+    }
+    col *= 1. - .2 * smoothstep(.7, 1.8, length(p));
+    gl_FragColor = vec4(col + (h21(px) - .5) * .015, 1.);
+  }`
+});
+const mesh = new THREE.Mesh(fullscreenTriangle(), mat); mesh.frustumCulled = false; const scene = new THREE.Scene(); scene.add(mesh);
+app.onResize((w, h) => { mat.uniforms.uAsp.value = w / h; mat.uniforms.uRes.value.set(w, h); });
+
+// seven data peaks; centres drift on integer harmonics of the loop, heights breathe
+const P = [[-.8, .4, .42, .9], [.7, -.5, .5, 1.0], [.2, .8, .32, .62], [-.3, -.8, .38, .7], [1.0, .6, .3, .55], [-1.1, -.4, .28, .5], [.1, -.1, .55, .55]];
+const ptxt = id => document.getElementById(id);
+const hRef = { fn: null };
+app.start((t) => {
+  const th = TAU * t / DURATION, u = mat.uniforms;
+  for (let i = 0; i < NG; i++) { const [x, y, s, a] = P[i]; G[i].set(x + .08 * Math.sin(th + i), y + .08 * Math.cos(th * 2 + i * 1.7), s * (1 + .06 * Math.sin(th + i * .8)), a * (.78 + .32 * (.5 + .5 * Math.sin(th * (1 + i % 2) + i * 1.3)))); }
+  // the data scale breathes: all peaks share one multiplier so the legend must rescale
+  const scale = .9 + .22 * Math.sin(th - .6); u.uScale.value = scale;
+  let mx = 0; for (let gx = -8; gx <= 8; gx++) for (let gy = -8; gy <= 8; gy++) { const x = gx * .2, y = gy * .2; let h = 0; for (let i = 0; i < NG; i++) { const dx = x - G[i].x, dy = y - G[i].y; h += G[i].w * Math.exp(-(dx * dx + dy * dy) / (2 * G[i].z * G[i].z)); } mx = Math.max(mx, h * scale); }
+  const E = 1500, peak = Math.round(mx * E / 10) * 10; ptxt('pk').textContent = peak + ' m'; ptxt('ci').textContent = Math.round(E * .05) + ' m';
+  [1, 2, 3, 4, 5].forEach(k => { ptxt('t' + k).textContent = Math.round(E * k * .2) + ' m'; });
+  u.uYaw.value = .55 * Math.sin(th) + app.pointer.x * .5; u.uPitch.value = .88 + app.pointer.y * .22 + .05 * Math.sin(th * 2);
+  r.setRenderTarget(null); r.render(scene, ORTHO);
+});
+</script>
+</body>
+</html>
